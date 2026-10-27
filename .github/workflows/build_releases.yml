@@ -1,0 +1,62 @@
+name: Build Windows & Android Release
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Windows Executable (.exe)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Build Windows .exe
+        run: flutter build windows --release
+
+      - name: Package Windows .exe Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: FormaStudio-Windows-Release
+          path: build/windows/x64/runner/Release/
+
+  build-android:
+    name: Build Android APK (.apk)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Package Android APK Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: FormaStudio-Android-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
