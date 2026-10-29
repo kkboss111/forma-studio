@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../../domain/models/project_model.dart';
 import '../../../domain/models/page_model.dart';
 import '../../../app/theme/forma_colors.dart';
+import '../../../app/theme/forma_theme.dart';
 import '../../../app/theme/neumorphic.dart';
 import '../../../app/theme/liquid_glass.dart';
 import '../../../app/widgets/forma_logo.dart';
@@ -42,6 +43,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isLoading = true;
   String _searchQuery = '';
   String _activeTab = 'recent'; // 'recent', 'templates', 'favorites'
+  String _templateCategory = 'components'; // 'components' vs 'screens'
 
   // Bulk Selection
   bool _isBulkSelectMode = false;
@@ -336,6 +338,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         SnackBar(
           content: Text('Duplicated "${project.name}" as "${copy.name}"'),
           backgroundColor: FormaColors.primaryBlue,
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleFavorite(ProjectModel project) async {
+    final updated = project.copyWith(
+      isFavorite: !project.isFavorite,
+      updatedAt: DateTime.now(),
+    );
+    await _repository.saveProject(updated);
+    _loadProjects();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                updated.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                color: updated.isFavorite ? Colors.pinkAccent : Colors.white,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                updated.isFavorite
+                    ? 'Added "${project.name}" to Favorites ❤️'
+                    : 'Removed "${project.name}" from Favorites',
+              ),
+            ],
+          ),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -754,8 +787,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
-    final isGlass = settings.themeMode == FormaThemeMode.liquidGlass;
+    final isGlass = settings.themeMode == FormaThemeMode.liquidGlass ||
+        settings.themeMode == FormaThemeMode.glassmorphism;
     final isDark = settings.themeMode == FormaThemeMode.dark ||
+        settings.themeMode == FormaThemeMode.glassmorphism ||
         (settings.themeMode == FormaThemeMode.system &&
             Theme.of(context).brightness == Brightness.dark);
 
@@ -808,9 +843,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (isGlass) {
       return Container(
-        decoration: const BoxDecoration(
-          gradient: LiquidGlassTheme.liquidMeshGradient,
-        ),
+        decoration: settings.themeMode == FormaThemeMode.glassmorphism
+            ? FormaTheme.glassmorphismCosmicGradient
+            : const BoxDecoration(
+                gradient: LiquidGlassTheme.liquidMeshGradient,
+              ),
         child: content,
       );
     }
@@ -1815,6 +1852,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     onSelected: (val) {
                       switch (val) {
+                        case 'favorite':
+                          _toggleFavorite(project);
+                          break;
                         case 'properties':
                           _showProjectPropertiesDialog(project);
                           break;
@@ -1833,7 +1873,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       }
                     },
                     itemBuilder: (ctx) => [
-                      // 1. Properties (Rename & Info)
+                      // 1. Favorite Toggle
+                      PopupMenuItem(
+                        value: 'favorite',
+                        child: Row(
+                          children: [
+                            Icon(
+                              project.isFavorite
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              size: 16,
+                              color: project.isFavorite ? Colors.pinkAccent : null,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(project.isFavorite ? 'Remove Favorite' : 'Favorite'),
+                          ],
+                        ),
+                      ),
+                      // 2. Properties (Rename & Info)
                       const PopupMenuItem(
                         value: 'properties',
                         child: Row(
@@ -1932,32 +1989,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     bool isGlass,
     AppSettings settings,
   ) {
-    final templates = TemplateService.getTemplates();
+    final allTemplates = TemplateService.getTemplates();
+    final templates = allTemplates.where((t) => t.category == _templateCategory).toList();
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Editable Design Templates',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: isDark
-                  ? FormaColors.darkTextMain
-                  : FormaColors.lightTextMain,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Editable Design Templates',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: isDark
+                          ? FormaColors.darkTextMain
+                          : FormaColors.lightTextMain,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _templateCategory == 'components'
+                        ? 'Components, Buttons, Vector Glyphs, and Cosmic Glass Cards'
+                        : 'Full app screens, dashboards, onboarding, and ecommerce views',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: isDark
+                          ? FormaColors.darkTextMuted
+                          : FormaColors.lightTextMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Explore 12 real editable vector templates, including the Neumorphic Fan Analysis Dashboard reference!',
-            style: TextStyle(
-              fontSize: 11.5,
-              color: isDark
-                  ? FormaColors.darkTextMuted
-                  : FormaColors.lightTextMuted,
-            ),
+          const SizedBox(height: 12),
+          // Category Switcher
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(
+                value: 'components',
+                label: Text('UI Components & Kits'),
+                icon: Icon(Icons.widgets_rounded, size: 16),
+              ),
+              ButtonSegment(
+                value: 'screens',
+                label: Text('App Mockups & Screens'),
+                icon: Icon(Icons.smartphone_rounded, size: 16),
+              ),
+            ],
+            selected: {_templateCategory},
+            onSelectionChanged: (val) => setState(() => _templateCategory = val.first),
           ),
           const SizedBox(height: 14),
           Expanded(

@@ -13,6 +13,7 @@ import '../../../app/theme/liquid_glass.dart';
 import '../../../app/theme/responsive_breakpoints.dart';
 import '../../../app/widgets/forma_logo.dart';
 import '../../../app/widgets/studio_loading_transition.dart';
+import '../../../app/theme/forma_theme.dart';
 import '../../settings/models/app_settings.dart';
 import '../../settings/screens/settings_screen.dart';
 import '../controllers/editor_controller.dart';
@@ -25,6 +26,7 @@ import '../widgets/prototype/prototype_player.dart';
 import '../widgets/dialogs/export_dialog.dart';
 import '../widgets/dialogs/color_picker_dialog.dart';
 import '../widgets/dialogs/command_palette.dart';
+import '../widgets/dialogs/manual_zoom_dialog.dart';
 import '../widgets/panels/timeline_panel.dart';
 
 class EditorScreen extends ConsumerStatefulWidget {
@@ -435,8 +437,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
       editorControllerProvider(widget.project).notifier,
     );
     final settings = ref.watch(settingsProvider);
-    final isGlass = settings.themeMode == FormaThemeMode.liquidGlass;
+    final isGlass = settings.themeMode == FormaThemeMode.liquidGlass ||
+        settings.themeMode == FormaThemeMode.glassmorphism;
     final isDark = settings.themeMode == FormaThemeMode.dark ||
+        settings.themeMode == FormaThemeMode.glassmorphism ||
         (settings.themeMode == FormaThemeMode.system &&
             Theme.of(context).brightness == Brightness.dark);
 
@@ -594,9 +598,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
 
     if (isGlass) {
       return Container(
-        decoration: const BoxDecoration(
-          gradient: LiquidGlassTheme.liquidMeshGradient,
-        ),
+        decoration: settings.themeMode == FormaThemeMode.glassmorphism
+            ? FormaTheme.glassmorphismCosmicGradient
+            : const BoxDecoration(
+                gradient: LiquidGlassTheme.liquidMeshGradient,
+              ),
         child: content,
       );
     }
@@ -612,6 +618,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
     bool isDark,
     bool isGlass,
   ) {
+    final settings = ref.watch(settingsProvider);
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -736,11 +743,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
             ),
             const SizedBox(width: 6),
 
-            // Zoom percentage indicator
+            // Zoom percentage indicator (clickable to manually edit exact zoom %)
             NeuButton(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              onPressed: controller.zoom100,
-              tooltip: 'Reset Zoom (100%)',
+              onPressed: () => showManualZoomDialog(
+                context,
+                controller,
+                state.zoom,
+                settings.extendedZoomLimit,
+              ),
+              tooltip: 'Set Zoom Level (${(state.zoom * 100).toInt()}%)',
               child: Text(
                 '${(state.zoom * 100).toInt()}%',
                 style: TextStyle(

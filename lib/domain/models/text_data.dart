@@ -1,5 +1,25 @@
 import 'package:flutter/material.dart';
 
+enum TextTransformCase {
+  none,
+  uppercase,
+  lowercase,
+  capitalize;
+
+  String get label {
+    switch (this) {
+      case TextTransformCase.none:
+        return 'Aa';
+      case TextTransformCase.uppercase:
+        return 'AA';
+      case TextTransformCase.lowercase:
+        return 'aa';
+      case TextTransformCase.capitalize:
+        return 'Abc';
+    }
+  }
+}
+
 class TextNodeData {
   final String text;
   final double fontSize;
@@ -10,8 +30,10 @@ class TextNodeData {
   final bool strikethrough;
   final TextAlign textAlign;
   final double letterSpacing;
+  final double wordSpacing;
   final double lineHeight;
   final bool isAutoWidth;
+  final TextTransformCase textCase;
 
   const TextNodeData({
     this.text = 'Text',
@@ -23,8 +45,10 @@ class TextNodeData {
     this.strikethrough = false,
     this.textAlign = TextAlign.left,
     this.letterSpacing = 0.0,
+    this.wordSpacing = 0.0,
     this.lineHeight = 1.3,
     this.isAutoWidth = true,
+    this.textCase = TextTransformCase.none,
   });
 
   TextNodeData copyWith({
@@ -37,8 +61,10 @@ class TextNodeData {
     bool? strikethrough,
     TextAlign? textAlign,
     double? letterSpacing,
+    double? wordSpacing,
     double? lineHeight,
     bool? isAutoWidth,
+    TextTransformCase? textCase,
   }) {
     return TextNodeData(
       text: text ?? this.text,
@@ -50,9 +76,28 @@ class TextNodeData {
       strikethrough: strikethrough ?? this.strikethrough,
       textAlign: textAlign ?? this.textAlign,
       letterSpacing: letterSpacing ?? this.letterSpacing,
+      wordSpacing: wordSpacing ?? this.wordSpacing,
       lineHeight: lineHeight ?? this.lineHeight,
       isAutoWidth: isAutoWidth ?? this.isAutoWidth,
+      textCase: textCase ?? this.textCase,
     );
+  }
+
+  String get displayedText {
+    if (text.isEmpty) return text;
+    switch (textCase) {
+      case TextTransformCase.uppercase:
+        return text.toUpperCase();
+      case TextTransformCase.lowercase:
+        return text.toLowerCase();
+      case TextTransformCase.capitalize:
+        return text.split(' ').map((w) {
+          if (w.isEmpty) return '';
+          return '${w[0].toUpperCase()}${w.substring(1)}';
+        }).join(' ');
+      case TextTransformCase.none:
+        return text;
+    }
   }
 
   FontWeight get resolvedFontWeight {
@@ -102,8 +147,10 @@ class TextNodeData {
     'strikethrough': strikethrough,
     'textAlign': textAlign.name,
     'letterSpacing': letterSpacing,
+    'wordSpacing': wordSpacing,
     'lineHeight': lineHeight,
     'isAutoWidth': isAutoWidth,
+    'textCase': textCase.name,
   };
 
   factory TextNodeData.fromJson(Map<String, dynamic> json) {
@@ -120,8 +167,13 @@ class TextNodeData {
         orElse: () => TextAlign.left,
       ),
       letterSpacing: (json['letterSpacing'] as num?)?.toDouble() ?? 0.0,
+      wordSpacing: (json['wordSpacing'] as num?)?.toDouble() ?? 0.0,
       lineHeight: (json['lineHeight'] as num?)?.toDouble() ?? 1.3,
       isAutoWidth: json['isAutoWidth'] as bool? ?? true,
+      textCase: TextTransformCase.values.firstWhere(
+        (e) => e.name == json['textCase'],
+        orElse: () => TextTransformCase.none,
+      ),
     );
   }
 }

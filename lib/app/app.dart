@@ -27,19 +27,17 @@ class FormaApp extends ConsumerWidget {
         mode = ThemeMode.dark;
         break;
       case FormaThemeMode.liquidGlass:
-      case FormaThemeMode.glassmorphism:
         mode = ThemeMode.light;
-        activeLightTheme = FormaTheme.glassmorphism();
         break;
-      case FormaThemeMode.cyberpunk:
+      case FormaThemeMode.glassmorphism:
         mode = ThemeMode.dark;
-        activeDarkTheme = FormaTheme.cyberpunk();
+        activeDarkTheme = FormaTheme.glassmorphism();
         break;
     }
 
     final isSystemDark = View.of(context).platformDispatcher.platformBrightness == Brightness.dark;
     final isDark = settings.themeMode == FormaThemeMode.dark ||
-        settings.themeMode == FormaThemeMode.cyberpunk ||
+        settings.themeMode == FormaThemeMode.glassmorphism ||
         (settings.themeMode == FormaThemeMode.system && isSystemDark);
 
     return MaterialApp(

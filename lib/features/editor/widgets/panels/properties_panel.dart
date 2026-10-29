@@ -99,10 +99,6 @@ class PropertiesPanel extends ConsumerWidget {
 
             // Vector Path Section (Explicit Edit button so double-clicking doesn't accidentally trigger)
             _buildVectorPathSection(context, primaryNode, controller, isDark),
-            const Divider(height: 24),
-
-            // WCAG Contrast Badge
-            _buildContrastChecker(context, primaryNode, state, isDark),
           ],
         ],
       ),
@@ -1565,114 +1561,6 @@ class PropertiesPanel extends ConsumerWidget {
     );
   }
 
-  Widget _buildContrastChecker(
-    BuildContext context,
-    DesignNode node,
-    dynamic state,
-    bool isDark,
-  ) {
-    final page = state.project.getPage(state.activePageId);
-    final bgColor = page?.backgroundColor ?? Colors.white;
-    final fgColor = node.fills.isNotEmpty
-        ? node.fills.first.color
-        : Colors.black;
-
-    final ratio = _calculateContrastRatio(fgColor, bgColor);
-    final passesAA = ratio >= 4.5;
-    final passesAAA = ratio >= 7.0;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF141820) : const Color(0xFFE2EAF4),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'ACCESSIBILITY (WCAG CONTRAST)',
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                        color: isDark
-                            ? FormaColors.darkTextMuted
-                            : FormaColors.lightTextMuted,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Layer color readability vs canvas',
-                      style: TextStyle(
-                        fontSize: 8.5,
-                        color: isDark ? Colors.white38 : Colors.black38,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                '${ratio.toStringAsFixed(1)}:1',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              _buildBadge('AA Normal', passesAA),
-              _buildBadge('AAA Enhanced', passesAAA),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBadge(String label, bool pass) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: pass
-            ? FormaColors.successGreen.withValues(alpha: 0.15)
-            : FormaColors.dangerRed.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        '$label ${pass ? "PASS" : "FAIL"}',
-        style: TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          color: pass ? FormaColors.successGreen : FormaColors.dangerRed,
-        ),
-      ),
-    );
-  }
-
-  double _calculateContrastRatio(Color fg, Color bg) {
-    final l1 = fg.computeLuminance();
-    final l2 = bg.computeLuminance();
-    final brightest = math.max(l1, l2);
-    final darkest = math.min(l1, l2);
-    return (brightest + 0.05) / (darkest + 0.05);
-  }
-
   Widget _buildSectionTitle(String title, bool isDark) {
     return Text(
       title,
@@ -1763,22 +1651,6 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
   late TextEditingController _customFontCtrl;
   final FocusNode _focusNode = FocusNode();
   final FocusNode _fontSizeFocusNode = FocusNode();
-  bool _showCustomFontInput = false;
-
-  static const List<String> _fontFamilies = [
-    'Plus Jakarta Sans',
-    'Inter',
-    'Roboto',
-    'Open Sans',
-    'Poppins',
-    'Lato',
-    'Montserrat',
-    'Playfair Display',
-    'Fira Code',
-    'Courier New',
-    'Georgia',
-    'Arial',
-  ];
 
   static const List<int> _fontWeights = [
     100,
@@ -1844,10 +1716,35 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
     );
   }
 
+  void _showFontPickerModal(BuildContext context, TextNodeData t) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return _FontPickerSheet(
+          initialFont: t.fontFamily,
+          isDark: widget.isDark,
+          onFontSelected: (newFont) {
+            _customFontCtrl.text = newFont;
+            _update(t.copyWith(fontFamily: newFont));
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = widget.node.textData ?? const TextNodeData();
     final isDark = widget.isDark;
+
+    TextStyle activeFontStyle;
+    try {
+      activeFontStyle = GoogleFonts.getFont(t.fontFamily, fontSize: 13, fontWeight: FontWeight.w600);
+    } catch (_) {
+      activeFontStyle = TextStyle(fontFamily: t.fontFamily, fontSize: 13, fontWeight: FontWeight.w600);
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1864,20 +1761,28 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
                 color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
               ),
             ),
-            IconButton(
-              icon: Icon(
-                _showCustomFontInput ? Icons.font_download_rounded : Icons.add_circle_outline_rounded,
-                size: 16,
-                color: FormaColors.primaryBlue,
+            InkWell(
+              onTap: () => _showFontPickerModal(context, t),
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Row(
+                  children: [
+                    const Icon(Icons.font_download_rounded, size: 14, color: FormaColors.primaryBlue),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'Browse Fonts',
+                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: FormaColors.primaryBlue),
+                    ),
+                  ],
+                ),
               ),
-              tooltip: _showCustomFontInput ? 'Hide Custom Font' : 'Type Custom Font Name',
-              onPressed: () => setState(() => _showCustomFontInput = !_showCustomFontInput),
             ),
           ],
         ),
         const SizedBox(height: 8),
 
-        // Text Content Input (Persistent controller)
+        // Text Content Input
         TextField(
           controller: _textCtrl,
           focusNode: _focusNode,
@@ -1901,92 +1806,53 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
         ),
         const SizedBox(height: 10),
 
-        // Custom Font Input Bar (if toggled)
-        if (_showCustomFontInput) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        // Font Family Selector Tile (Renders Font in its own style)
+        InkWell(
+          onTap: () => _showFontPickerModal(context, t),
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: FormaColors.primaryBlue.withValues(alpha: 0.5)),
+              border: Border.all(
+                color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+              ),
             ),
             child: Row(
               children: [
+                const Icon(Icons.text_fields_rounded, size: 18, color: FormaColors.primaryBlue),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: TextField(
-                    controller: _customFontCtrl,
-                    style: const TextStyle(fontSize: 12),
-                    decoration: const InputDecoration(
-                      hintText: 'Type any Google or System Font (e.g. Bebas Neue)',
-                      border: InputBorder.none,
-                      isDense: true,
-                    ),
-                    onSubmitted: (fontName) {
-                      if (fontName.trim().isNotEmpty) {
-                        _update(t.copyWith(fontFamily: fontName.trim()));
-                      }
-                    },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'FONT FAMILY',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        t.fontFamily,
+                        style: activeFontStyle.copyWith(
+                          color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
-                GestureDetector(
-                  onTap: () {
-                    final fontName = _customFontCtrl.text.trim();
-                    if (fontName.isNotEmpty) {
-                      _update(t.copyWith(fontFamily: fontName));
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: FormaColors.primaryBlue,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      'Apply',
-                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ),
+                Icon(
+                  Icons.unfold_more_rounded,
+                  size: 18,
+                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 10),
-        ],
-
-        // Font Family Dropdown
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              isExpanded: true,
-              value: _fontFamilies.contains(t.fontFamily) ? t.fontFamily : null,
-              hint: Text(
-                t.fontFamily,
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-              ),
-              icon: const Icon(Icons.arrow_drop_down_rounded),
-              items: _fontFamilies.map((font) {
-                TextStyle fontStyle;
-                try {
-                  fontStyle = GoogleFonts.getFont(font, fontSize: 12.5);
-                } catch (_) {
-                  fontStyle = TextStyle(fontFamily: font, fontSize: 12.5);
-                }
-                return DropdownMenuItem(
-                  value: font,
-                  child: Text(font, style: fontStyle),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) {
-                  _customFontCtrl.text = val;
-                  _update(t.copyWith(fontFamily: val));
-                }
-              },
             ),
           ),
         ),
@@ -2024,12 +1890,12 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
         ),
         const SizedBox(height: 10),
 
-        // Direct Editable Font Size Input Row
+        // Font Size Input Row
         Row(
           children: [
             Expanded(
               child: Container(
-                height: 42,
+                height: 40,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
                   color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
@@ -2043,7 +1909,7 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
                     Text(
                       'SIZE (PT)',
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 9.5,
                         fontWeight: FontWeight.bold,
                         color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
                       ),
@@ -2077,8 +1943,8 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
               children: [
                 NeuIconButton(
                   icon: Icons.remove_rounded,
-                  size: 34,
-                  iconSize: 16,
+                  size: 32,
+                  iconSize: 15,
                   onPressed: () {
                     final next = math.max(6.0, t.fontSize - 2.0);
                     _fontSizeCtrl.text = next.toStringAsFixed(0);
@@ -2088,8 +1954,8 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
                 const SizedBox(width: 4),
                 NeuIconButton(
                   icon: Icons.add_rounded,
-                  size: 34,
-                  iconSize: 16,
+                  size: 32,
+                  iconSize: 15,
                   onPressed: () {
                     final next = t.fontSize + 2.0;
                     _fontSizeCtrl.text = next.toStringAsFixed(0);
@@ -2142,7 +2008,7 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
         ),
         const SizedBox(height: 10),
 
-        // Line Height & Letter Spacing
+        // 3-Column Metrics: Line Height, Letter Spacing, Word Spacing
         Row(
           children: [
             Expanded(
@@ -2154,20 +2020,79 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
                 onChanged: (v) => _update(t.copyWith(lineHeight: math.max(0.5, v))),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Expanded(
               child: FormaTouchNudgeField(
-                label: 'SPACING',
+                label: 'LETTER',
                 value: t.letterSpacing,
                 step: 0.5,
                 onChanged: (v) => _update(t.copyWith(letterSpacing: v)),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: FormaTouchNudgeField(
+                label: 'WORD',
+                value: t.wordSpacing,
+                step: 1.0,
+                onChanged: (v) => _update(t.copyWith(wordSpacing: v)),
               ),
             ),
           ],
         ),
         const SizedBox(height: 10),
 
-        // Alignment & Style Actions
+        // Text Transform (Casing)
+        Text(
+          'TEXT TRANSFORM',
+          style: TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+            color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: TextTransformCase.values.map((tc) {
+            final isSel = t.textCase == tc;
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: InkWell(
+                  onTap: () => _update(t.copyWith(textCase: tc)),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    height: 28,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: isSel
+                          ? FormaColors.primaryBlue
+                          : (isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: isSel
+                            ? FormaColors.primaryBlue
+                            : (isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+                      ),
+                    ),
+                    child: Text(
+                      tc.label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: isSel ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 10),
+
+        // Alignment (Left, Center, Right) & Style (Italic, Underline, Strikethrough)
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -2175,34 +2100,29 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
               children: [
                 NeuIconButton(
                   icon: Icons.format_align_left_rounded,
-                  size: 28,
-                  iconSize: 14,
+                  size: 30,
+                  iconSize: 15,
                   isActive: t.textAlign == TextAlign.left,
+                  tooltip: 'Align Left',
                   onPressed: () => _update(t.copyWith(textAlign: TextAlign.left)),
                 ),
                 const SizedBox(width: 4),
                 NeuIconButton(
                   icon: Icons.format_align_center_rounded,
-                  size: 28,
-                  iconSize: 14,
+                  size: 30,
+                  iconSize: 15,
                   isActive: t.textAlign == TextAlign.center,
+                  tooltip: 'Align Center',
                   onPressed: () => _update(t.copyWith(textAlign: TextAlign.center)),
                 ),
                 const SizedBox(width: 4),
                 NeuIconButton(
                   icon: Icons.format_align_right_rounded,
-                  size: 28,
-                  iconSize: 14,
+                  size: 30,
+                  iconSize: 15,
                   isActive: t.textAlign == TextAlign.right,
+                  tooltip: 'Align Right',
                   onPressed: () => _update(t.copyWith(textAlign: TextAlign.right)),
-                ),
-                const SizedBox(width: 4),
-                NeuIconButton(
-                  icon: Icons.format_align_justify_rounded,
-                  size: 28,
-                  iconSize: 14,
-                  isActive: t.textAlign == TextAlign.justify,
-                  onPressed: () => _update(t.copyWith(textAlign: TextAlign.justify)),
                 ),
               ],
             ),
@@ -2210,32 +2130,354 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
               children: [
                 NeuIconButton(
                   icon: Icons.format_italic_rounded,
-                  size: 28,
-                  iconSize: 14,
+                  size: 30,
+                  iconSize: 15,
                   isActive: t.isItalic,
+                  tooltip: 'Italic',
                   onPressed: () => _update(t.copyWith(isItalic: !t.isItalic)),
                 ),
                 const SizedBox(width: 4),
                 NeuIconButton(
                   icon: Icons.format_underlined_rounded,
-                  size: 28,
-                  iconSize: 14,
+                  size: 30,
+                  iconSize: 15,
                   isActive: t.underline,
+                  tooltip: 'Underline',
                   onPressed: () => _update(t.copyWith(underline: !t.underline)),
                 ),
                 const SizedBox(width: 4),
                 NeuIconButton(
                   icon: Icons.format_strikethrough_rounded,
-                  size: 28,
-                  iconSize: 14,
+                  size: 30,
+                  iconSize: 15,
                   isActive: t.strikethrough,
+                  tooltip: 'Strikethrough',
                   onPressed: () => _update(t.copyWith(strikethrough: !t.strikethrough)),
                 ),
               ],
             ),
           ],
         ),
+        const SizedBox(height: 8),
+
+        // Auto Width vs Fixed Width Toggle
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => _update(t.copyWith(isAutoWidth: !t.isAutoWidth)),
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        t.isAutoWidth ? Icons.fit_screen_rounded : Icons.crop_free_rounded,
+                        size: 14,
+                        color: FormaColors.primaryBlue,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        t.isAutoWidth ? 'Auto-Fit Content Width' : 'Fixed Bounding Box Width',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
+    );
+  }
+}
+
+/// Comprehensive, modern Google Font Picker with live font previews and categories.
+class _FontPickerSheet extends StatefulWidget {
+  final String initialFont;
+  final bool isDark;
+  final ValueChanged<String> onFontSelected;
+
+  const _FontPickerSheet({
+    required this.initialFont,
+    required this.isDark,
+    required this.onFontSelected,
+  });
+
+  @override
+  State<_FontPickerSheet> createState() => _FontPickerSheetState();
+}
+
+class _FontPickerSheetState extends State<_FontPickerSheet> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  final TextEditingController _customCtrl = TextEditingController();
+  String _selectedCategory = 'All';
+
+  static const Map<String, List<String>> _fontCategories = {
+    'All': [
+      'Plus Jakarta Sans', 'Inter', 'Roboto', 'Poppins', 'Montserrat', 'Lato',
+      'Open Sans', 'Raleway', 'Ubuntu', 'Nunito', 'Rubik', 'Work Sans',
+      'Playfair Display', 'Merriweather', 'Lora', 'Cinzel', 'PT Serif', 'Baskervville',
+      'Bebas Neue', 'Oswald', 'Righteous', 'Orbitron', 'Abril Fatface', 'Anton', 'Syne',
+      'Fira Code', 'JetBrains Mono', 'Roboto Mono', 'Source Code Pro', 'Space Mono',
+      'Dancing Script', 'Pacifico', 'Caveat', 'Satisfy', 'Great Vibes'
+    ],
+    'Sans': [
+      'Plus Jakarta Sans', 'Inter', 'Roboto', 'Poppins', 'Montserrat', 'Lato',
+      'Open Sans', 'Raleway', 'Ubuntu', 'Nunito', 'Rubik', 'Work Sans'
+    ],
+    'Serif': [
+      'Playfair Display', 'Merriweather', 'Lora', 'Cinzel', 'PT Serif', 'Baskervville'
+    ],
+    'Display': [
+      'Bebas Neue', 'Oswald', 'Righteous', 'Orbitron', 'Abril Fatface', 'Anton', 'Syne'
+    ],
+    'Mono': [
+      'Fira Code', 'JetBrains Mono', 'Roboto Mono', 'Source Code Pro', 'Space Mono'
+    ],
+    'Script': [
+      'Dancing Script', 'Pacifico', 'Caveat', 'Satisfy', 'Great Vibes'
+    ],
+  };
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _customCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final allFonts = _fontCategories[_selectedCategory] ?? _fontCategories['All']!;
+    final query = _searchCtrl.text.toLowerCase().trim();
+    final filteredFonts = allFonts.where((f) => f.toLowerCase().contains(query)).toList();
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.75,
+      decoration: BoxDecoration(
+        color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // Drag handle
+          Container(
+            margin: const EdgeInsets.only(top: 10, bottom: 6),
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white24 : Colors.black12,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.font_download_rounded, color: FormaColors.primaryBlue, size: 22),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Typography Library',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
+                      ),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+
+          // Custom Google Font input row
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+              decoration: BoxDecoration(
+                color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _customCtrl,
+                      style: const TextStyle(fontSize: 12),
+                      decoration: const InputDecoration(
+                        hintText: 'Type any Google Font (e.g. Space Grotesk)...',
+                        border: InputBorder.none,
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      final val = _customCtrl.text.trim();
+                      if (val.isNotEmpty) {
+                        widget.onFontSelected(val);
+                        Navigator.pop(context);
+                      }
+                    },
+                    child: const Text('Apply', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Search Filter Bar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (_) => setState(() {}),
+              style: const TextStyle(fontSize: 12.5),
+              decoration: InputDecoration(
+                hintText: 'Filter fonts...',
+                prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                filled: true,
+                fillColor: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Category Chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: _fontCategories.keys.map((cat) {
+                final isSel = _selectedCategory == cat;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: FilterChip(
+                    label: Text(cat),
+                    selected: isSel,
+                    selectedColor: FormaColors.primaryBlue.withValues(alpha: 0.2),
+                    checkmarkColor: FormaColors.primaryBlue,
+                    labelStyle: TextStyle(
+                      fontSize: 11,
+                      fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                      color: isSel ? FormaColors.primaryBlue : null,
+                    ),
+                    onSelected: (_) => setState(() => _selectedCategory = cat),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Font List View with Live Preview in That Font!
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              itemCount: filteredFonts.length,
+              separatorBuilder: (_, index) => const SizedBox(height: 6),
+              itemBuilder: (ctx, index) {
+                final font = filteredFonts[index];
+                final isSelected = widget.initialFont.toLowerCase() == font.toLowerCase();
+
+                TextStyle fontStyle;
+                try {
+                  fontStyle = GoogleFonts.getFont(font, fontSize: 16, fontWeight: FontWeight.w600);
+                } catch (_) {
+                  fontStyle = TextStyle(fontFamily: font, fontSize: 16, fontWeight: FontWeight.w600);
+                }
+
+                return InkWell(
+                  onTap: () {
+                    widget.onFontSelected(font);
+                    Navigator.pop(context);
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? FormaColors.primaryBlue.withValues(alpha: 0.12)
+                          : (isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isSelected
+                            ? FormaColors.primaryBlue
+                            : (isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+                        width: isSelected ? 1.5 : 1.0,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                font,
+                                style: fontStyle.copyWith(
+                                  color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'The quick brown fox jumps over the lazy dog',
+                                style: fontStyle.copyWith(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.normal,
+                                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isSelected)
+                          const Icon(Icons.check_circle_rounded, color: FormaColors.primaryBlue, size: 20),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

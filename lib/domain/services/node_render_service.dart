@@ -557,6 +557,7 @@ class NodeRenderService {
     Paint? foreground,
     List<Shadow>? shadows,
     required double letterSpacing,
+    double wordSpacing = 0.0,
     required double height,
   }) {
     try {
@@ -570,6 +571,7 @@ class NodeRenderService {
           foreground: foreground,
           shadows: shadows,
           letterSpacing: letterSpacing,
+          wordSpacing: wordSpacing,
           height: height,
         );
       }
@@ -582,6 +584,7 @@ class NodeRenderService {
         color: color ?? const Color(0xFF2B3445),
         shadows: shadows,
         letterSpacing: letterSpacing,
+        wordSpacing: wordSpacing,
         height: height,
       );
     } catch (_) {
@@ -595,6 +598,7 @@ class NodeRenderService {
         foreground: foreground,
         shadows: shadows,
         letterSpacing: letterSpacing,
+        wordSpacing: wordSpacing,
         height: height,
       );
     }
@@ -610,11 +614,12 @@ class NodeRenderService {
       decoration: t.resolvedDecoration,
       color: Colors.black,
       letterSpacing: t.letterSpacing,
+      wordSpacing: t.wordSpacing,
       height: t.lineHeight,
     );
 
     final textSpan = TextSpan(
-      text: t.text.isEmpty ? ' ' : t.text,
+      text: t.displayedText.isEmpty ? ' ' : t.displayedText,
       style: style,
     );
 
@@ -633,7 +638,8 @@ class NodeRenderService {
 
   static void _renderTextNode(Canvas canvas, DesignNode node, Rect rect) {
     final t = node.textData!;
-    if (t.text.isEmpty) return;
+    final textToRender = t.displayedText;
+    if (textToRender.isEmpty) return;
 
     // 1. Build text shadows from node effects (drop shadow, outer glow)
     final shadows = <Shadow>[];
@@ -654,7 +660,7 @@ class NodeRenderService {
       }
     }
 
-    final layoutWidth = t.isAutoWidth ? double.infinity : rect.width;
+    final layoutWidth = math.max(10.0, rect.width);
 
     // 2. Render Text Stroke (if any visible stroke is configured)
     for (final stroke in node.strokes) {
@@ -688,15 +694,16 @@ class NodeRenderService {
         foreground: strokePaint,
         shadows: shadows.isNotEmpty ? shadows : null,
         letterSpacing: t.letterSpacing,
+        wordSpacing: t.wordSpacing,
         height: t.lineHeight,
       );
 
       final strokePainter = TextPainter(
-        text: TextSpan(text: t.text, style: strokeStyle),
+        text: TextSpan(text: textToRender, style: strokeStyle),
         textDirection: TextDirection.ltr,
         textAlign: t.textAlign,
       );
-      strokePainter.layout(maxWidth: layoutWidth);
+      strokePainter.layout(minWidth: rect.width, maxWidth: layoutWidth);
       strokePainter.paint(canvas, rect.topLeft);
     }
 
@@ -738,15 +745,16 @@ class NodeRenderService {
       foreground: fillForeground,
       shadows: (node.strokes.isEmpty && shadows.isNotEmpty) ? shadows : null,
       letterSpacing: t.letterSpacing,
+      wordSpacing: t.wordSpacing,
       height: t.lineHeight,
     );
 
     final fillPainter = TextPainter(
-      text: TextSpan(text: t.text, style: fillStyle),
+      text: TextSpan(text: textToRender, style: fillStyle),
       textDirection: TextDirection.ltr,
       textAlign: t.textAlign,
     );
-    fillPainter.layout(maxWidth: layoutWidth);
+    fillPainter.layout(minWidth: rect.width, maxWidth: layoutWidth);
     fillPainter.paint(canvas, rect.topLeft);
   }
 

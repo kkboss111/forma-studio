@@ -9,7 +9,6 @@ enum FormaThemeMode {
   dark,
   liquidGlass,
   glassmorphism,
-  cyberpunk,
 }
 
 enum SidebarSide {
@@ -114,6 +113,7 @@ class AppSettings {
   final bool showRulers;
   final bool showGrid;
   final bool highRefreshRate;
+  final bool extendedZoomLimit;
   final bool reduceBlurForPerformance;
   final int autoSaveIntervalMs;
   final SidebarSide sidebarPrimarySide;
@@ -134,6 +134,7 @@ class AppSettings {
     this.showRulers = true,
     this.showGrid = true,
     this.highRefreshRate = true,
+    this.extendedZoomLimit = false,
     this.reduceBlurForPerformance = false,
     this.autoSaveIntervalMs = 600,
     this.sidebarPrimarySide = SidebarSide.left,
@@ -155,6 +156,7 @@ class AppSettings {
     bool? showRulers,
     bool? showGrid,
     bool? highRefreshRate,
+    bool? extendedZoomLimit,
     bool? reduceBlurForPerformance,
     int? autoSaveIntervalMs,
     SidebarSide? sidebarPrimarySide,
@@ -176,6 +178,7 @@ class AppSettings {
       showRulers: showRulers ?? this.showRulers,
       showGrid: showGrid ?? this.showGrid,
       highRefreshRate: highRefreshRate ?? this.highRefreshRate,
+      extendedZoomLimit: extendedZoomLimit ?? this.extendedZoomLimit,
       reduceBlurForPerformance:
           reduceBlurForPerformance ?? this.reduceBlurForPerformance,
       autoSaveIntervalMs: autoSaveIntervalMs ?? this.autoSaveIntervalMs,
@@ -201,6 +204,7 @@ class AppSettings {
     'showRulers': showRulers,
     'showGrid': showGrid,
     'highRefreshRate': highRefreshRate,
+    'extendedZoomLimit': extendedZoomLimit,
     'reduceBlurForPerformance': reduceBlurForPerformance,
     'autoSaveIntervalMs': autoSaveIntervalMs,
     'sidebarPrimarySide': sidebarPrimarySide.name,
@@ -226,6 +230,7 @@ class AppSettings {
       showRulers: json['showRulers'] as bool? ?? true,
       showGrid: json['showGrid'] as bool? ?? true,
       highRefreshRate: json['highRefreshRate'] as bool? ?? true,
+      extendedZoomLimit: json['extendedZoomLimit'] as bool? ?? false,
       reduceBlurForPerformance:
           json['reduceBlurForPerformance'] as bool? ?? false,
       autoSaveIntervalMs: json['autoSaveIntervalMs'] as int? ?? 600,
@@ -303,6 +308,12 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   void toggleShowGrid(bool val) =>
       _saveSettings(state.copyWith(showGrid: val));
+
+  void toggleHighRefreshRate([bool? val]) =>
+      _saveSettings(state.copyWith(highRefreshRate: val ?? !state.highRefreshRate));
+
+  void toggleExtendedZoomLimit([bool? val]) =>
+      _saveSettings(state.copyWith(extendedZoomLimit: val ?? !state.extendedZoomLimit));
 
   void toggleReduceBlur(bool val) =>
       _saveSettings(state.copyWith(reduceBlurForPerformance: val));

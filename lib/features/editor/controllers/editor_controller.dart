@@ -857,15 +857,19 @@ class EditorController extends StateNotifier<EditorState> {
     state = state.copyWith(panOffset: state.panOffset + delta);
   }
 
-  void setZoom(double zoom) {
-    final clamped = zoom.clamp(0.1, 8.0);
+  void setZoom(double zoom, {bool extendedLimit = false}) {
+    final minZ = extendedLimit ? 0.01 : 0.1;
+    final maxZ = extendedLimit ? 50.0 : 8.0;
+    final clamped = zoom.clamp(minZ, maxZ);
     state = state.copyWith(zoom: clamped);
   }
 
   /// Zooms in or out while preserving the document point under [screenFocalPoint].
-  void zoomAroundPoint(double newZoom, Offset screenFocalPoint) {
+  void zoomAroundPoint(double newZoom, Offset screenFocalPoint, {bool extendedLimit = false}) {
     final oldZoom = state.zoom;
-    final clamped = newZoom.clamp(0.1, 8.0);
+    final minZ = extendedLimit ? 0.01 : 0.1;
+    final maxZ = extendedLimit ? 50.0 : 8.0;
+    final clamped = newZoom.clamp(minZ, maxZ);
     if ((oldZoom - clamped).abs() < 0.0001) return;
 
     final docFocal = (screenFocalPoint - state.panOffset) / oldZoom;

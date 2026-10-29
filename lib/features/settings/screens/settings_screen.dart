@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../app/theme/forma_colors.dart';
+import '../../../app/theme/forma_theme.dart';
 import '../../../app/theme/neumorphic.dart';
 import '../../../app/theme/liquid_glass.dart';
 import '../../../app/widgets/forma_logo.dart';
@@ -121,60 +122,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         }
       }
     } else if (mode == FormaThemeMode.glassmorphism) {
-      final pin = await _showPasscodeDialog(
-        context,
-        'Glassmorphism Passcode',
-        'Glassmorphism Frost Mode',
-      );
-      if (pin == '2222') {
-        notifier.setThemeMode(FormaThemeMode.glassmorphism);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Passcode verified! Glassmorphism Frost Mode activated.'),
-              backgroundColor: FormaColors.successGreen,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      } else if (pin != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Incorrect passcode. Please enter the valid security PIN.'),
-              backgroundColor: FormaColors.dangerRed,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    } else if (mode == FormaThemeMode.cyberpunk) {
-      final pin = await _showPasscodeDialog(
-        context,
-        'Cyberpunk Neon Passcode',
-        'Cyberpunk Neon Mode',
-      );
-      if (pin == '4444') {
-        notifier.setThemeMode(FormaThemeMode.cyberpunk);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Passcode verified! Cyberpunk Neon Mode activated.'),
-              backgroundColor: FormaColors.successGreen,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      } else if (pin != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Incorrect passcode. Please enter the valid security PIN.'),
-              backgroundColor: FormaColors.dangerRed,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
+      notifier.setThemeMode(FormaThemeMode.glassmorphism);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Glassmorphism Cosmic Theme activated! ✨'),
+            backgroundColor: FormaColors.primaryBlue,
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     } else {
       notifier.setThemeMode(mode);
@@ -409,7 +365,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
-    final isGlass = settings.themeMode == FormaThemeMode.liquidGlass;
+    final isGlass = settings.themeMode == FormaThemeMode.liquidGlass ||
+        settings.themeMode == FormaThemeMode.glassmorphism;
     final isDark = settings.themeMode == FormaThemeMode.dark ||
         (settings.themeMode == FormaThemeMode.system &&
             Theme.of(context).brightness == Brightness.dark);
@@ -582,9 +539,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     if (isGlass) {
       return Container(
-        decoration: const BoxDecoration(
-          gradient: LiquidGlassTheme.liquidMeshGradient,
-        ),
+        decoration: settings.themeMode == FormaThemeMode.glassmorphism
+            ? FormaTheme.glassmorphismCosmicGradient
+            : const BoxDecoration(
+                gradient: LiquidGlassTheme.liquidMeshGradient,
+              ),
         child: content,
       );
     }
@@ -689,12 +648,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon = Icons.blur_on_rounded;
                 break;
               case FormaThemeMode.glassmorphism:
-                label = 'Glassmorphism Frost';
+                label = 'Glassmorphism (CSS Showcase)';
                 icon = Icons.auto_awesome_rounded;
-                break;
-              case FormaThemeMode.cyberpunk:
-                label = 'Cyberpunk Neon';
-                icon = Icons.electric_bolt_rounded;
                 break;
             }
 
@@ -813,32 +768,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
         _buildSectionTitle('Home Grid Card Density', isDark),
         const SizedBox(height: 8),
-        ListTile(
-          title: const Text('Recent & Template Card Sizing'),
-          subtitle: const Text(
-            'Compact fits 4 cards cleanly on mobile screens without scrolling.',
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+            ),
           ),
-          trailing: SegmentedButton<CardDensity>(
-            segments: const [
-              ButtonSegment(
-                value: CardDensity.compact,
-                label: Text('Compact (4-fit)'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Recent & Template Card Sizing',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
+                ),
               ),
-              ButtonSegment(
-                value: CardDensity.normal,
-                label: Text('Normal'),
+              const SizedBox(height: 4),
+              Text(
+                'Compact fits 4 cards cleanly on mobile screens without scrolling.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                ),
               ),
-              ButtonSegment(
-                value: CardDensity.spacious,
-                label: Text('Spacious'),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<CardDensity>(
+                  segments: const [
+                    ButtonSegment(
+                      value: CardDensity.compact,
+                      label: Text('Compact'),
+                    ),
+                    ButtonSegment(
+                      value: CardDensity.normal,
+                      label: Text('Normal'),
+                    ),
+                    ButtonSegment(
+                      value: CardDensity.spacious,
+                      label: Text('Spacious'),
+                    ),
+                  ],
+                  selected: {settings.cardDensity},
+                  onSelectionChanged: (val) {
+                    if (val.isNotEmpty) {
+                      notifier.setCardDensity(val.first);
+                    }
+                  },
+                ),
               ),
             ],
-            selected: {settings.cardDensity},
-            onSelectionChanged: (val) {
-              if (val.isNotEmpty) {
-                notifier.setCardDensity(val.first);
-              }
-            },
           ),
         ),
         const Divider(height: 32),
@@ -928,6 +912,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           subtitle: const Text('Display subtle background grid dots and alignment lines'),
           value: settings.showGrid,
           onChanged: notifier.toggleShowGrid,
+        ),
+        SwitchListTile(
+          title: const Text('Extended Zoom Limit (1% – 5000%)'),
+          subtitle: const Text(
+            'Allows extreme macro zoom into vector paths (up to 5000%) and birds-eye overview (down to 1%)',
+          ),
+          value: settings.extendedZoomLimit,
+          onChanged: notifier.toggleExtendedZoomLimit,
         ),
         const Divider(height: 32),
 
@@ -1038,7 +1030,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             'Enables smoothest scrolling, panning, and interactive transformations',
           ),
           value: settings.highRefreshRate,
-          onChanged: (val) {},
+          onChanged: (val) => notifier.toggleHighRefreshRate(val),
         ),
         SwitchListTile(
           title: const Text('Reduce Blur on Low-End Devices'),

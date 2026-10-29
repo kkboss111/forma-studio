@@ -76,7 +76,28 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> {
     const Color(0xFF3B82F6),
     const Color(0xFF10B981),
   ];
+  List<double>? _gradientStops;
   int _activeStopIndex = 0;
+
+  void _ensureStops() {
+    if (_gradientStops == null || _gradientStops!.length != _gradientColors.length) {
+      _gradientStops = List.generate(
+        _gradientColors.length,
+        (i) => _gradientColors.length > 1 ? (i / (_gradientColors.length - 1)) : 0.0,
+      );
+    }
+  }
+
+  static const _gradientPresets = [
+    (name: 'Sunset', colors: [Color(0xFFFF512F), Color(0xFFDD2476)]),
+    (name: 'Ocean', colors: [Color(0xFF00C6FF), Color(0xFF0072FF)]),
+    (name: 'Cosmic', colors: [Color(0xFF431D77), Color(0xFFB12A6F), Color(0xFF0C7585)]),
+    (name: 'Aurora', colors: [Color(0xFF00F260), Color(0xFF0575E6)]),
+    (name: 'Royal', colors: [Color(0xFF7F00FF), Color(0xFFE100FF)]),
+    (name: 'Ember', colors: [Color(0xFFF5AF19), Color(0xFFF12711)]),
+    (name: 'Emerald', colors: [Color(0xFF11998E), Color(0xFF38EF7D)]),
+    (name: 'Cyber', colors: [Color(0xFF6366F1), Color(0xFFEC4899), Color(0xFFFACC15)]),
+  ];
 
   static const List<Color> _swatches = [
     // Theme Slate / Neumorphic
@@ -126,6 +147,11 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> {
             widget.initialFill!.gradientColors!.isNotEmpty) {
           _gradientColors = List<Color>.from(widget.initialFill!.gradientColors!);
         }
+        if (widget.initialFill!.gradientStops != null &&
+            widget.initialFill!.gradientStops!.isNotEmpty) {
+          _gradientStops = List<double>.from(widget.initialFill!.gradientStops!);
+        }
+        _ensureStops();
         _tabIndex = 2; // Jump directly to Gradients tab
       }
     }
@@ -164,10 +190,12 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> {
 
     if (_tabIndex == 2) {
       // Gradient
+      _ensureStops();
       if (_gradientType == DesignFillType.radialGradient) {
         widget.onFillChanged!(
           DesignFill.radial(
             colors: _gradientColors,
+            stops: _gradientStops,
             opacity: _opacity,
           ),
         );
@@ -175,6 +203,7 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> {
         widget.onFillChanged!(
           DesignFill.angular(
             colors: _gradientColors,
+            stops: _gradientStops,
             opacity: _opacity,
           ),
         );
@@ -182,6 +211,7 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> {
         widget.onFillChanged!(
           DesignFill.linear(
             colors: _gradientColors,
+            stops: _gradientStops,
             angle: _gradientAngle,
             opacity: _opacity,
           ),
@@ -371,14 +401,14 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> {
         ),
         const SizedBox(height: 12),
 
-        // Opacity Slider
+        // Opacity Slider (Emerald green for high contrast and visibility in dark mode)
         FormaTouchSlider(
           label: 'OPACITY',
           value: (_opacity * 100).roundToDouble(),
           min: 0,
           max: 100,
           step: 1,
-          activeColor: Colors.black54,
+          activeColor: const Color(0xFF10B981),
           onChanged: (v) {
             setState(() => _opacity = v / 100.0);
             _updateColor(_currentColor.withValues(alpha: _opacity));
@@ -540,6 +570,7 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> {
 
   // --- TAB 2: GRADIENTS (LINEAR, RADIAL, ANGULAR / SWEEP) ---
   Widget _buildGradientsTab(bool isDark) {
+    _ensureStops();
     // Gradient Preview decoration
     Decoration previewDecor;
     if (_gradientType == DesignFillType.radialGradient) {
@@ -547,6 +578,7 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> {
         borderRadius: BorderRadius.circular(14),
         gradient: RadialGradient(
           colors: _gradientColors,
+          stops: _gradientStops,
           center: Alignment.center,
           radius: 0.8,
         ),
@@ -556,6 +588,7 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> {
         borderRadius: BorderRadius.circular(14),
         gradient: SweepGradient(
           colors: _gradientColors,
+          stops: _gradientStops,
           center: Alignment.center,
         ),
       );
@@ -565,11 +598,16 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> {
         borderRadius: BorderRadius.circular(14),
         gradient: LinearGradient(
           colors: _gradientColors,
+          stops: _gradientStops,
           begin: Alignment(-math.cos(rad), -math.sin(rad)),
           end: Alignment(math.cos(rad), math.sin(rad)),
         ),
       );
     }
+
+    final activeStopPos = (_gradientStops != null && _activeStopIndex < _gradientStops!.length)
+        ? _gradientStops![_activeStopIndex]
+        : (_activeStopIndex / math.max(1, _gradientColors.length - 1));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -638,96 +676,218 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> {
                     : FormaColors.lightTextMuted,
               ),
             ),
-            if (_gradientColors.length < 5)
-              TextButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _gradientColors.add(_currentColor);
-                    _activeStopIndex = _gradientColors.length - 1;
-                  });
-                  _emitFillChange();
-                },
-                icon: const Icon(Icons.add_rounded, size: 14),
-                label: const Text('Add Stop', style: TextStyle(fontSize: 11)),
-              ),
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.swap_horiz_rounded, size: 20),
+                  tooltip: 'Invert / Reverse Gradient',
+                  onPressed: () {
+                    setState(() {
+                      _gradientColors = _gradientColors.reversed.toList();
+                      if (_gradientStops != null) {
+                        _gradientStops = _gradientStops!.reversed.map((s) => (1.0 - s).clamp(0.0, 1.0)).toList();
+                      }
+                    });
+                    _emitFillChange();
+                  },
+                ),
+                if (_gradientColors.length < 8)
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _gradientColors.add(_currentColor);
+                        _ensureStops();
+                        _activeStopIndex = _gradientColors.length - 1;
+                      });
+                      _emitFillChange();
+                    },
+                    icon: const Icon(Icons.add_rounded, size: 14),
+                    label: const Text('Add Stop', style: TextStyle(fontSize: 11)),
+                  ),
+              ],
+            ),
           ],
         ),
         const SizedBox(height: 8),
 
         // Color Stops List
-        Row(
-          children: _gradientColors.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final color = entry.value;
-            final isSelected = _activeStopIndex == idx;
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: _gradientColors.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final color = entry.value;
+              final isSelected = _activeStopIndex == idx;
 
-            return Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _activeStopIndex = idx;
-                    _currentColor = color;
-                    _hexController.text = _colorToHex(color);
-                  });
-                },
-                child: Column(
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isSelected
-                              ? FormaColors.primaryBlue
-                              : Colors.black26,
-                          width: isSelected ? 3 : 1,
-                        ),
-                        boxShadow: [
-                          if (isSelected)
-                            BoxShadow(
-                              color: FormaColors.primaryBlue.withValues(
-                                alpha: 0.4,
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _activeStopIndex = idx;
+                      _currentColor = color;
+                      _hexController.text = _colorToHex(color);
+                    });
+                  },
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isSelected
+                                ? FormaColors.primaryBlue
+                                : Colors.black26,
+                            width: isSelected ? 3 : 1,
+                          ),
+                          boxShadow: [
+                            if (isSelected)
+                              BoxShadow(
+                                color: FormaColors.primaryBlue.withValues(
+                                  alpha: 0.4,
+                                ),
+                                blurRadius: 8,
                               ),
-                              blurRadius: 8,
-                            ),
-                        ],
+                          ],
+                        ),
+                        child: isSelected
+                            ? const Icon(
+                                Icons.check_rounded,
+                                size: 16,
+                                color: Colors.white,
+                              )
+                            : null,
                       ),
-                      child: isSelected
-                          ? const Icon(
-                              Icons.check_rounded,
-                              size: 16,
-                              color: Colors.white,
-                            )
-                          : null,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '#${_colorToHex(color).substring(0, 4)}',
-                      style: const TextStyle(fontSize: 9, fontFamily: 'monospace'),
-                    ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '#${_colorToHex(color).substring(0, 4)}',
+                        style: const TextStyle(fontSize: 9, fontFamily: 'monospace'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Stop Position Slider
+        FormaTouchSlider(
+          label: 'STOP #${_activeStopIndex + 1} POSITION',
+          value: (activeStopPos * 100.0).clamp(0.0, 100.0).roundToDouble(),
+          min: 0,
+          max: 100,
+          step: 1,
+          activeColor: const Color(0xFF10B981),
+          onChanged: (v) {
+            _ensureStops();
+            setState(() {
+              _gradientStops![_activeStopIndex] = v / 100.0;
+            });
+            _emitFillChange();
+          },
+        ),
+        const SizedBox(height: 12),
+
+        // Action Buttons Row: Color Wheel & Delete Stop
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                ),
+                onPressed: () => _showStopColorWheelModal(context, isDark),
+                icon: const Icon(Icons.palette_rounded, size: 16, color: FormaColors.primaryBlue),
+                label: Text(
+                  'Edit Stop #${_activeStopIndex + 1}',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            if (_gradientColors.length > 2) ...[
+              const SizedBox(width: 8),
+              IconButton.outlined(
+                tooltip: 'Delete Stop #${_activeStopIndex + 1}',
+                icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
+                onPressed: () {
+                  setState(() {
+                    _gradientColors.removeAt(_activeStopIndex);
+                    _gradientStops?.removeAt(_activeStopIndex);
+                    if (_activeStopIndex >= _gradientColors.length) {
+                      _activeStopIndex = _gradientColors.length - 1;
+                    }
+                    _ensureStops();
+                  });
+                  _emitFillChange();
+                },
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Curated Gradient Presets
+        Text(
+          'CURATED GRADIENT PRESETS',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+            color: isDark
+                ? FormaColors.darkTextMuted
+                : FormaColors.lightTextMuted,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _gradientPresets.map((preset) {
+            return InkWell(
+              onTap: () {
+                setState(() {
+                  _gradientColors = List<Color>.from(preset.colors);
+                  _gradientStops = null;
+                  _ensureStops();
+                  _activeStopIndex = 0;
+                  _currentColor = _gradientColors.first;
+                  _hexController.text = _colorToHex(_currentColor);
+                });
+                _emitFillChange();
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                width: 72,
+                height: 34,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  gradient: LinearGradient(colors: preset.colors),
+                  border: Border.all(color: Colors.white24, width: 1.5),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
                   ],
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  preset.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    shadows: [Shadow(color: Colors.black87, blurRadius: 4)],
+                  ),
                 ),
               ),
             );
           }).toList(),
         ),
         const SizedBox(height: 16),
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          ),
-          onPressed: () => _showStopColorWheelModal(context, isDark),
-          icon: const Icon(Icons.palette_rounded, size: 16, color: FormaColors.primaryBlue),
-          label: Text(
-            'Pick Stop #${_activeStopIndex + 1} with Color Wheel',
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-          ),
-        ),
-        const SizedBox(height: 14),
 
         // Quick Swatches to apply to active stop
         Text(

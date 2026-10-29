@@ -16,6 +16,8 @@ import '../../../../core/geometry/transform2d.dart';
 import '../../../../core/geometry/geometry_utils.dart';
 import '../../controllers/editor_state.dart';
 import '../../controllers/editor_controller.dart';
+import '../../../settings/models/app_settings.dart';
+import '../dialogs/manual_zoom_dialog.dart';
 import 'canvas_painter.dart';
 
 class CanvasViewport extends ConsumerStatefulWidget {
@@ -32,6 +34,7 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
   Offset? _dragStartDoc;
   Map<String, Offset>? _originalNodePositions;
   Rect? _originalNodeBounds;
+  double? _originalFontSize;
   ResizeHandleType? _activeHandle;
   Rect? _currentMarquee;
   final List<SnapGuide> _currentSnapGuides = [];
@@ -264,7 +267,13 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
                           const SizedBox(width: 4),
                           InkWell(
                             onTap: () {
-                              controller.zoom100(centerPoint);
+                              final settings = ref.read(settingsProvider);
+                              showManualZoomDialog(
+                                context,
+                                controller,
+                                state.zoom,
+                                settings.extendedZoomLimit,
+                              );
                             },
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
@@ -468,6 +477,7 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
             if (h.touchRect.contains(_dragStartDoc!)) {
               _activeHandle = h.type;
               _originalNodeBounds = node.rect;
+              _originalFontSize = node.textData?.fontSize;
               controller.setDragMode(
                 h.type == ResizeHandleType.rotation
                     ? DragMode.rotatingNode
@@ -647,12 +657,30 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
             constrainedH,
           );
         }
-        final updated = node.copyWith(
-          x: newBounds.left,
-          y: newBounds.top,
-          width: math.max(10.0, newBounds.width),
-          height: math.max(10.0, newBounds.height),
-        );
+        DesignNode updated;
+        if (node.type == NodeType.text && node.textData != null) {
+          final scaleH = newBounds.height / math.max(10.0, _originalNodeBounds!.height);
+          final scaleW = newBounds.width / math.max(10.0, _originalNodeBounds!.width);
+          final scale = math.max(scaleH, scaleW);
+          final baseFs = _originalFontSize ?? node.textData!.fontSize;
+          final newFontSize = (baseFs * scale).clamp(6.0, 500.0);
+          final updatedTextData = node.textData!.copyWith(fontSize: newFontSize);
+          final measured = NodeRenderService.measureText(updatedTextData);
+          updated = node.copyWith(
+            x: newBounds.left,
+            y: newBounds.top,
+            width: math.max(newBounds.width, measured.width + 8.0),
+            height: math.max(newBounds.height, measured.height + 4.0),
+            textData: updatedTextData,
+          );
+        } else {
+          updated = node.copyWith(
+            x: newBounds.left,
+            y: newBounds.top,
+            width: math.max(10.0, newBounds.width),
+            height: math.max(10.0, newBounds.height),
+          );
+        }
         controller.updateSingleNodeLive(updated);
       }
     } else if (state.dragMode == DragMode.rotatingNode) {
@@ -719,21 +747,53 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
         final endY = _dragStartDoc!.dy + side * (h < 0 ? -1 : 1);
         rawRect = Rect.fromPoints(_dragStartDoc!, Offset(endX, endY));
       }
-      final finalRect = Rect.fromLTWH(
-        rawRect.left,
-        rawRect.top,
-        math.max(20.0, rawRect.width),
-        math.max(20.0, rawRect.height),
-      );
+      final isText = state.activeTool == EditorTool.text;
+      Rect finalRect;
+      if (isText) {
+        final rw = rawRect.width.abs();
+        final rh = rawRect.height.abs();
+        finalRect = Rect.fromLTWH(
+          rawRect.left,
+          rawRect.top,
+          rw > 40 ? rw : 200.0,
+          rh > 24 ? rh : 48.0,
+        );
+      } else {
+        finalRect = Rect.fromLTWH(
+          rawRect.left,
+          rawRect.top,
+          math.max(20.0, rawRect.width),
+          math.max(20.0, rawRect.height),
+        );
+      }
 
       final nodeType = _nodeTypeForTool(state.activeTool);
       final isTriangle = state.activeTool == EditorTool.triangle;
-      controller.createNode(
+      final createdId = controller.createNode(
         type: nodeType,
         rect: finalRect,
         polygonSides: isTriangle ? 3 : (nodeType == NodeType.polygon ? 5 : null),
-        name: isTriangle ? 'Triangle ${state.project.nodes.length + 1}' : null,
+        name: isTriangle
+            ? 'Triangle ${state.project.nodes.length + 1}'
+            : (isText ? 'Text ${state.project.nodes.length + 1}' : null),
       );
+
+      if (isText) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final createdNode = controller.currentState.project.nodes[createdId];
+          if (createdNode != null && mounted) {
+            _showInPlaceTextEditor(context, createdNode, controller);
+          }
+        });
+      }
+    } else if (state.dragMode == DragMode.resizingNode &&
+        _originalNodeBounds != null &&
+        state.selectedNodeIds.length == 1) {
+      final nodeId = state.selectedNodeIds.first;
+      final n = state.project.nodes[nodeId];
+      if (n != null) {
+        controller.updateNode(n);
+      }
     } else if (state.dragMode == DragMode.movingNodes &&
         _originalNodePositions != null) {
       // Commit final move positions
@@ -752,6 +812,7 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
       _dragStartDoc = null;
       _originalNodePositions = null;
       _originalNodeBounds = null;
+      _originalFontSize = null;
       _activeHandle = null;
       _currentMarquee = null;
       _currentSnapGuides.clear();

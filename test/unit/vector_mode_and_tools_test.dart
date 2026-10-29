@@ -139,24 +139,21 @@ void main() {
     });
   });
 
-  group('Theme Modes & Security Passcode Enum Tests', () {
-    test('FormaThemeMode has glassmorphism and cyberpunk enums', () {
+  group('Theme Modes & Extended Zoom Tests', () {
+    test('FormaThemeMode has glassmorphism enum', () {
       expect(FormaThemeMode.glassmorphism, isNotNull);
-      expect(FormaThemeMode.cyberpunk, isNotNull);
       expect(FormaThemeMode.values.contains(FormaThemeMode.glassmorphism), isTrue);
-      expect(FormaThemeMode.values.contains(FormaThemeMode.cyberpunk), isTrue);
     });
 
-    test('AppSettings serializes and restores glassmorphism and cyberpunk modes', () {
-      const settingsGlass = AppSettings(themeMode: FormaThemeMode.glassmorphism);
+    test('AppSettings serializes and restores glassmorphism and extendedZoomLimit', () {
+      const settingsGlass = AppSettings(
+        themeMode: FormaThemeMode.glassmorphism,
+        extendedZoomLimit: true,
+      );
       final jsonGlass = settingsGlass.toJson();
       final restoredGlass = AppSettings.fromJson(jsonGlass);
       expect(restoredGlass.themeMode, FormaThemeMode.glassmorphism);
-
-      const settingsCyber = AppSettings(themeMode: FormaThemeMode.cyberpunk);
-      final jsonCyber = settingsCyber.toJson();
-      final restoredCyber = AppSettings.fromJson(jsonCyber);
-      expect(restoredCyber.themeMode, FormaThemeMode.cyberpunk);
+      expect(restoredGlass.extendedZoomLimit, isTrue);
     });
   });
 }
