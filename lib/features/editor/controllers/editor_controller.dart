@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -32,7 +34,7 @@ class EditorController extends StateNotifier<EditorState> {
   final ProjectRepository _repository = ProjectRepository();
   final Uuid _uuid = const Uuid();
 
-  List<DesignNode> _clipboardNodes = [];
+  static List<DesignNode> globalClipboardNodes = [];
 
   EditorController(ProjectModel initialProject)
     : super(
@@ -126,6 +128,21 @@ class EditorController extends StateNotifier<EditorState> {
     _repository.scheduleAutosave(state.project);
   }
 
+  void setPageBackgroundColor(Color color) {
+    final page = state.project.getPage(state.activePageId);
+    if (page == null) return;
+    final updated = page.copyWith(backgroundColor: color);
+    final updatedPages = state.project.pages
+        .map((p) => p.id == page.id ? updated : p)
+        .toList();
+    state = state.copyWith(project: state.project.copyWith(pages: updatedPages));
+    _repository.scheduleAutosave(state.project);
+  }
+
+  Future<void> saveNow() async {
+    await _repository.saveProject(state.project);
+  }
+
   void setPageShowGrid(bool val) {
     final page = state.project.getPage(state.activePageId);
     if (page == null) return;
@@ -175,6 +192,9 @@ class EditorController extends StateNotifier<EditorState> {
 
   // --- Node Creation ---
 
+  /// Public getter to safely access current editor state from UI components.
+  EditorState get currentState => state;
+
   String createNode({
     required NodeType type,
     required Rect rect,
@@ -182,6 +202,7 @@ class EditorController extends StateNotifier<EditorState> {
     String? name,
     List<DesignFill>? fills,
     List<DesignStroke>? strokes,
+    List<DesignEffect>? effects,
     CornerRadii? cornerRadii,
     TextNodeData? textData,
     int? polygonSides,
@@ -227,6 +248,7 @@ class EditorController extends StateNotifier<EditorState> {
       height: nodeHeight,
       fills: defaultFills,
       strokes: defaultStrokes,
+      effects: effects ?? const [],
       cornerRadii:
           cornerRadii ??
           (type == NodeType.roundedRectangle
@@ -304,6 +326,63 @@ class EditorController extends StateNotifier<EditorState> {
       DesignFill.image(imageBase64: base64Image),
     ];
     updateNode(node.copyWith(fills: updatedFills));
+  }
+
+  void addDropShadowToSelected() {
+    for (final id in state.selectedNodeIds) {
+      final node = state.project.nodes[id];
+      if (node != null) {
+        final eff = const DesignEffect(
+          type: DesignEffectType.dropShadow,
+          color: Color(0x33000000),
+          offsetY: 6,
+          blurRadius: 16,
+          spreadRadius: 2,
+        );
+        updateNode(node.copyWith(effects: [...node.effects, eff]));
+      }
+    }
+  }
+
+  void addOuterGlowToSelected() {
+    for (final id in state.selectedNodeIds) {
+      final node = state.project.nodes[id];
+      if (node != null) {
+        final eff = const DesignEffect(
+          type: DesignEffectType.outerGlow,
+          color: Color(0x8800FFF0),
+          blurRadius: 20,
+          spreadRadius: 4,
+        );
+        updateNode(node.copyWith(effects: [...node.effects, eff]));
+      }
+    }
+  }
+
+  void addBlurToSelected() {
+    for (final id in state.selectedNodeIds) {
+      final node = state.project.nodes[id];
+      if (node != null) {
+        final eff = const DesignEffect(
+          type: DesignEffectType.blur,
+          blurRadius: 14,
+        );
+        updateNode(node.copyWith(effects: [...node.effects, eff]));
+      }
+    }
+  }
+
+  void addBackdropBlurToSelected() {
+    for (final id in state.selectedNodeIds) {
+      final node = state.project.nodes[id];
+      if (node != null) {
+        final eff = const DesignEffect(
+          type: DesignEffectType.backgroundBlur,
+          blurRadius: 20,
+        );
+        updateNode(node.copyWith(effects: [...node.effects, eff]));
+      }
+    }
   }
 
   // --- Deletion, Duplicate, Grouping ---
@@ -880,11 +959,20 @@ class EditorController extends StateNotifier<EditorState> {
 
   // --- Clipboard ---
 
-  void copySelection() {
-    _clipboardNodes = state.selectedNodeIds
+  void copySelection() async {
+    final nodes = state.selectedNodeIds
         .map((id) => state.project.nodes[id])
         .whereType<DesignNode>()
         .toList();
+    if (nodes.isEmpty) return;
+    globalClipboardNodes = List<DesignNode>.from(nodes);
+    try {
+      final jsonPayload = jsonEncode({
+        'forma_type': 'nodes',
+        'data': nodes.map((n) => n.toJson()).toList(),
+      });
+      await Clipboard.setData(ClipboardData(text: jsonPayload));
+    } catch (_) {}
   }
 
   void cutSelection() {
@@ -892,12 +980,29 @@ class EditorController extends StateNotifier<EditorState> {
     deleteSelectedNodes();
   }
 
-  void paste() {
-    if (_clipboardNodes.isEmpty) return;
+  void paste() async {
+    List<DesignNode> toPaste = List<DesignNode>.from(globalClipboardNodes);
+
+    if (toPaste.isEmpty) {
+      try {
+        final clipData = await Clipboard.getData(Clipboard.kTextPlain);
+        if (clipData?.text != null && clipData!.text!.contains('forma_type')) {
+          final decoded = jsonDecode(clipData.text!) as Map<String, dynamic>;
+          if (decoded['forma_type'] == 'nodes') {
+            final rawList = decoded['data'] as List;
+            toPaste = rawList
+                .map((j) => DesignNode.fromJson(j as Map<String, dynamic>))
+                .toList();
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (toPaste.isEmpty) return;
     final newSelected = <String>{};
     ProjectModel current = state.project;
 
-    for (final original in _clipboardNodes) {
+    for (final original in toPaste) {
       final newId = 'node-${_uuid.v4().substring(0, 8)}';
       final clone = original.copyWith(
         id: newId,
@@ -968,14 +1073,28 @@ class EditorController extends StateNotifier<EditorState> {
   // --- Real Vector Path Editing Engine ---
 
   String startNewVectorDraft(Offset docPos) {
+    final page = state.project.getPage(state.activePageId);
+    bool hasDrawnLayer = false;
+    if (page != null) {
+      for (final id in page.rootNodeIds) {
+        final n = state.project.nodes[id];
+        if (n != null && n.name.contains('Drawn Layer')) {
+          hasDrawnLayer = true;
+          break;
+        }
+      }
+    }
+
     final nodeId = 'vec_${DateTime.now().millisecondsSinceEpoch}';
     const initialAnchor = VectorAnchor(
       point: Offset.zero,
       isSmooth: true,
+      handleIn: Offset(-24, 0),
+      handleOut: Offset(24, 0),
     );
     final newNode = DesignNode(
       id: nodeId,
-      name: 'Vector Path',
+      name: hasDrawnLayer ? 'Drawn Layer (Stroke ${state.project.nodes.length + 1})' : 'Drawn Layer',
       type: NodeType.vectorPath,
       x: docPos.dx,
       y: docPos.dy,
@@ -988,7 +1107,7 @@ class EditorController extends StateNotifier<EditorState> {
       strokes: const [
         DesignStroke(
           color: Color(0xFF2563EB),
-          width: 2.5,
+          width: 3.0,
           cap: StrokeCap.round,
           join: StrokeJoin.round,
         ),
@@ -1514,12 +1633,124 @@ class EditorController extends StateNotifier<EditorState> {
           FloatKeyframe(timeMs: 3000, value: 360.0, interpolation: InterpolationType.linear),
         ],
       ));
+    } else if (type == 'bounce') {
+      tracks.add(NodeAnimationTrack(
+        nodeId: nodeId,
+        property: AnimProperty.y,
+        keyframes: [
+          FloatKeyframe(timeMs: 0, value: node.y - 120.0, interpolation: InterpolationType.easeIn),
+          FloatKeyframe(timeMs: 800, value: node.y, interpolation: InterpolationType.bounce),
+          FloatKeyframe(timeMs: 1400, value: node.y - 40.0, interpolation: InterpolationType.easeInOut),
+          FloatKeyframe(timeMs: 2000, value: node.y, interpolation: InterpolationType.bounce),
+        ],
+      ));
+    } else if (type == 'slideUp') {
+      tracks.add(NodeAnimationTrack(
+        nodeId: nodeId,
+        property: AnimProperty.y,
+        keyframes: [
+          FloatKeyframe(timeMs: 0, value: node.y + 140.0, interpolation: InterpolationType.easeOut),
+          FloatKeyframe(timeMs: 1000, value: node.y, interpolation: InterpolationType.easeInOut),
+        ],
+      ));
+      tracks.add(NodeAnimationTrack(
+        nodeId: nodeId,
+        property: AnimProperty.opacity,
+        keyframes: const [
+          FloatKeyframe(timeMs: 0, value: 0.0),
+          FloatKeyframe(timeMs: 800, value: 1.0),
+        ],
+      ));
+    } else if (type == 'slideDown') {
+      tracks.add(NodeAnimationTrack(
+        nodeId: nodeId,
+        property: AnimProperty.y,
+        keyframes: [
+          FloatKeyframe(timeMs: 0, value: node.y - 140.0, interpolation: InterpolationType.easeOut),
+          FloatKeyframe(timeMs: 1000, value: node.y, interpolation: InterpolationType.easeInOut),
+        ],
+      ));
+    } else if (type == 'pop') {
+      tracks.add(NodeAnimationTrack(
+        nodeId: nodeId,
+        property: AnimProperty.scaleX,
+        keyframes: const [
+          FloatKeyframe(timeMs: 0, value: 0.2, interpolation: InterpolationType.spring),
+          FloatKeyframe(timeMs: 600, value: 1.15, interpolation: InterpolationType.easeInOut),
+          FloatKeyframe(timeMs: 1000, value: 1.0, interpolation: InterpolationType.spring),
+        ],
+      ));
+      tracks.add(NodeAnimationTrack(
+        nodeId: nodeId,
+        property: AnimProperty.scaleY,
+        keyframes: const [
+          FloatKeyframe(timeMs: 0, value: 0.2, interpolation: InterpolationType.spring),
+          FloatKeyframe(timeMs: 600, value: 1.15, interpolation: InterpolationType.easeInOut),
+          FloatKeyframe(timeMs: 1000, value: 1.0, interpolation: InterpolationType.spring),
+        ],
+      ));
+    } else if (type == 'pulse') {
+      tracks.add(NodeAnimationTrack(
+        nodeId: nodeId,
+        property: AnimProperty.scaleX,
+        keyframes: const [
+          FloatKeyframe(timeMs: 0, value: 1.0),
+          FloatKeyframe(timeMs: 500, value: 1.2, interpolation: InterpolationType.easeInOut),
+          FloatKeyframe(timeMs: 1000, value: 1.0),
+        ],
+      ));
+      tracks.add(NodeAnimationTrack(
+        nodeId: nodeId,
+        property: AnimProperty.scaleY,
+        keyframes: const [
+          FloatKeyframe(timeMs: 0, value: 1.0),
+          FloatKeyframe(timeMs: 500, value: 1.2, interpolation: InterpolationType.easeInOut),
+          FloatKeyframe(timeMs: 1000, value: 1.0),
+        ],
+      ));
+    } else if (type == 'wobble') {
+      tracks.add(NodeAnimationTrack(
+        nodeId: nodeId,
+        property: AnimProperty.rotation,
+        keyframes: const [
+          FloatKeyframe(timeMs: 0, value: 0.0),
+          FloatKeyframe(timeMs: 250, value: -14.0),
+          FloatKeyframe(timeMs: 500, value: 14.0),
+          FloatKeyframe(timeMs: 750, value: -8.0),
+          FloatKeyframe(timeMs: 1000, value: 8.0),
+          FloatKeyframe(timeMs: 1250, value: 0.0),
+        ],
+      ));
+    } else if (type == 'float') {
+      tracks.add(NodeAnimationTrack(
+        nodeId: nodeId,
+        property: AnimProperty.y,
+        keyframes: [
+          FloatKeyframe(timeMs: 0, value: node.y, interpolation: InterpolationType.easeInOut),
+          FloatKeyframe(timeMs: 1000, value: node.y - 25.0, interpolation: InterpolationType.easeInOut),
+          FloatKeyframe(timeMs: 2000, value: node.y, interpolation: InterpolationType.easeInOut),
+        ],
+      ));
+    } else if (type == 'strobe') {
+      tracks.add(NodeAnimationTrack(
+        nodeId: nodeId,
+        property: AnimProperty.opacity,
+        keyframes: const [
+          FloatKeyframe(timeMs: 0, value: 1.0, interpolation: InterpolationType.hold),
+          FloatKeyframe(timeMs: 200, value: 0.1, interpolation: InterpolationType.hold),
+          FloatKeyframe(timeMs: 400, value: 1.0, interpolation: InterpolationType.hold),
+          FloatKeyframe(timeMs: 600, value: 0.1, interpolation: InterpolationType.hold),
+          FloatKeyframe(timeMs: 800, value: 1.0, interpolation: InterpolationType.hold),
+        ],
+      ));
     }
 
     state = state.copyWith(
       timeline: state.timeline.copyWith(tracks: tracks, isLooping: true),
     );
   }
+
+  void applyMotionPreset(String type) => addQuickMotionPreset(type);
 
   // --- SVG Import ---
 

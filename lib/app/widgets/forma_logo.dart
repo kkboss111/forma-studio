@@ -17,7 +17,7 @@ class FormaLogo extends StatelessWidget {
 
   const FormaLogo({
     super.key,
-    this.size = 32.0,
+    this.size = 42.0,
     this.isAnimated = false,
     this.primaryColor,
     this.secondaryColor,

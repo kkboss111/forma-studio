@@ -836,12 +836,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ? 0
             : _activeTab == 'templates'
             ? 1
-            : 2,
+            : _activeTab == 'favorites'
+            ? 2
+            : 3,
         onDestinationSelected: (idx) {
           setState(() {
             if (idx == 0) _activeTab = 'recent';
             if (idx == 1) _activeTab = 'templates';
             if (idx == 2) _activeTab = 'favorites';
+            if (idx == 3) _activeTab = 'updates';
           });
         },
         destinations: const [
@@ -859,6 +862,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             icon: Icon(Icons.favorite_border_rounded),
             selectedIcon: Icon(Icons.favorite_rounded),
             label: 'Favorites',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.new_releases_outlined),
+            selectedIcon: Icon(Icons.new_releases_rounded),
+            label: 'Updates',
           ),
         ],
       ),
@@ -905,40 +913,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     bool isDark,
     bool isGlass,
   ) {
-    return Column(
-      children: [
-        // Brand logo & title matching reference style
-        const SizedBox(height: 12),
-        const FormaLogo(size: 40),
-        const SizedBox(height: 8),
-        Text(
-          'FORMA STUDIO',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.2,
-            color: isDark
-                ? FormaColors.darkTextMain
-                : FormaColors.lightTextMain,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: FormaColors.primaryBlue.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Text(
-            'v0.1 (Beta Testing)',
-            style: TextStyle(
-              fontSize: 9.5,
-              fontWeight: FontWeight.bold,
-              color: FormaColors.primaryBlue,
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: IntrinsicHeight(
+              child: Column(
+                children: [
+                  // Brand logo & title matching reference style
+                  const SizedBox(height: 8),
+                  const FormaLogo(size: 42),
+                  const SizedBox(height: 8),
+                  Text(
+                    'FORMA STUDIO',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                      color: isDark
+                          ? FormaColors.darkTextMain
+                          : FormaColors.lightTextMain,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: FormaColors.primaryBlue.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'v1.3 (Studio Edition)',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: FormaColors.primaryBlue,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
 
         // Navigation Links
         _sidebarNavItem(
@@ -973,6 +987,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           isSelected: _activeTab == 'favorites',
           onTap: () {
             setState(() => _activeTab = 'favorites');
+            if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+              Navigator.of(context).pop();
+            }
+          },
+          isDark: isDark,
+        ),
+        const SizedBox(height: 10),
+        _sidebarNavItem(
+          label: 'WHATS NEW & UPDATES',
+          icon: Icons.new_releases_outlined,
+          isSelected: _activeTab == 'updates',
+          onTap: () {
+            setState(() => _activeTab = 'updates');
             if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
               Navigator.of(context).pop();
             }
@@ -1053,8 +1080,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
-      ],
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1253,6 +1285,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (_activeTab == 'templates') {
       return _buildTemplatesView(context, isDark, isGlass, settings);
     }
+    if (_activeTab == 'updates') {
+      return _buildChangelogView(context, isDark, isGlass);
+    }
 
     final filtered = _projects.where((p) {
       if (_searchQuery.isNotEmpty &&
@@ -1270,6 +1305,49 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Drag & Drop / Quick File Import Banner (Desktop & Tablet)
+          if (_activeTab == 'recent' && MediaQuery.of(context).size.width >= 850) ...[
+            InkWell(
+              onTap: _importProject,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: FormaColors.primaryBlue.withValues(alpha: isDark ? 0.08 : 0.05),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: FormaColors.primaryBlue.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.file_upload_outlined, color: FormaColors.primaryBlue, size: 22),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Drag & Drop .forma or Design Files Here',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                          Text(
+                            'Or click to browse and open existing projects, Figma, or SVG packages instantly',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios_rounded, color: FormaColors.primaryBlue, size: 14),
+                  ],
+                ),
+              ),
+            ),
+          ],
           // Top Row: Search & Create New Button
           Row(
             children: [
@@ -1977,6 +2055,214 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   },
                 );
               },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChangelogView(
+    BuildContext context,
+    bool isDark,
+    bool isGlass,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "What's New & Version Changelog",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Track the latest features, engine updates, and release notes',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                    ),
+                  ),
+                ],
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: FormaColors.primaryBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.menu_book_rounded, size: 16),
+                label: const Text('Open 10-Page Manual', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                onPressed: () => showDialog(
+                  context: context,
+                  builder: (ctx) => const FormaDocumentationDialog(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: ListView(
+              children: [
+                _buildVersionCard(
+                  version: 'v1.3.0 (Latest Release)',
+                  date: 'Current Studio Edition',
+                  tagColor: const Color(0xFF10B981),
+                  isLatest: true,
+                  isDark: isDark,
+                  features: const [
+                    '📱 Mobile Portrait Mode Optimization: Bottom dock now has a single unified Shapes menu with all shapes accessible with one tap, plus persistent canvas background color swatch.',
+                    '✒️ Vector Pen & Dedicated Drawn Layer: Freehand & Pen drafting automatically places all strokes into a single clean "Drawn Layer" so work stays organized.',
+                    '🔘 Explicit Edit Vector Path Button: Double clicking no longer accidentally triggers vector editing; edit mode is entered cleanly through the toolbar or Properties button.',
+                    '📐 Properties Tab Overhaul: Recreated layout with clear text indicators and badges for every field (X, Y, W, H, Rotation, Fillet Radius, Opacity %, Blur, Spread).',
+                    '✨ Advanced Effects Suite: Deep sliders for Blur Radius (0-100), Spread (-50 to 50), Darkness (0-100%), Offsets X/Y, and one-tap effect presets (Soft Shadow, Neon Glow, Glass Frost).',
+                    '📁 Windows Explorer Folders in Layers: Real Windows-style expandable/collapsible folders with chevrons, folder gold icons, and dedicated "New Folder" creation.',
+                    '📋 Cross-Canvas Multi-Shape Copy & Paste: Copy shapes with Ctrl+C and paste onto any canvas, page, or project with Ctrl+V and global system clipboard support.',
+                    '⌨️ 120+ Command Palette & PC Commands: Searchable commands with F11 Fullscreen, Cache Cleanup, Diagnostics, and JSON export for Windows users.',
+                    '🎨 True Glassmorphism & Cyberpunk Themes: Distinctive frosted glass and electric neon theme styling across the entire editor and canvas.',
+                    '🎬 100+ Timeline Animation Presets: Added Spin, Bounce, Slide Up, Pop, Pulse, Float, Wobble, Strobe, and Orbit animations.',
+                    '📖 10-Page Comprehensive Guide: Full interactive user guide with diagrams, shortcuts, and PDF export.',
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _buildVersionCard(
+                  version: 'v1.2.0',
+                  date: 'Previous Release',
+                  tagColor: const Color(0xFF3B82F6),
+                  isLatest: false,
+                  isDark: isDark,
+                  features: const [
+                    '🔺 Triangle & Polygon Tool with 3 to 12 corners and quadratic Bezier fillet radius (0 to 50 px).',
+                    '🔒 Shift Key 1:1 Aspect Constraint: Hold Shift to draw and resize perfect circles, squares, and equilateral shapes.',
+                    '📦 SVG Recursive Export Overhaul: Full nested hierarchy for frames/groups and base64 embedded images.',
+                    '🔐 Secret Studio Themes: Unlocked via hidden security passcodes.',
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _buildVersionCard(
+                  version: 'v1.1.0',
+                  date: 'Initial Multi-Format Release',
+                  tagColor: const Color(0xFF8B5CF6),
+                  isLatest: false,
+                  isDark: isDark,
+                  features: const [
+                    'Universal Format Service: Export and import Figma (.fig), Sketch (.sketch), Adobe XD, AutoCAD DXF, and PostScript EPS.',
+                    'Interactive Prototype Player with Smart Animate and transition triggers.',
+                    '12 Editable Templates including Neumorphic Fan Dashboard and UI Kits.',
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVersionCard({
+    required String version,
+    required String date,
+    required Color tagColor,
+    required bool isLatest,
+    required bool isDark,
+    required List<String> features,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isLatest ? tagColor : (isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+          width: isLatest ? 1.5 : 1.0,
+        ),
+        boxShadow: isLatest
+            ? [
+                BoxShadow(
+                  color: tagColor.withValues(alpha: 0.12),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: tagColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  version,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: tagColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                date,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                ),
+              ),
+              const Spacer(),
+              if (isLatest)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: tagColor,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'ACTIVE',
+                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          ...features.map(
+            (f) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Expanded(
+                    child: Text(
+                      f,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.45,
+                        color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

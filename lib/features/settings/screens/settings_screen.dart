@@ -32,6 +32,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   int _totalProjectsBytes = 0;
   bool _isLoadingStats = true;
 
+  final List<String> _dockItems = [
+    'Layers Panel Button',
+    'Selection Tool (V)',
+    'Shapes Menu (Rect, Circle, Triangle)',
+    'Vector Pen & Drawn Layer (P)',
+    'Text Typography Tool (T)',
+    'Image Insertion Tool',
+    'Canvas Background Swatch',
+    'Pan & Hand Navigation Tool (H)',
+    'Properties Panel Button',
+  ];
+
   final List<String> _tabs = [
     'Appearance',
     'Editor & Canvas',
@@ -917,7 +929,96 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           value: settings.showGrid,
           onChanged: notifier.toggleShowGrid,
         ),
+        const Divider(height: 32),
+
+        // UI Position & Layout Customizer
+        _buildSectionTitle('UI Position & Layout Customizer', isDark),
+        const SizedBox(height: 8),
+        Text(
+          'Customize and drag & drop where your workspace buttons and tool docks are positioned:',
+          style: TextStyle(fontSize: 12, color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted),
+        ),
+        const SizedBox(height: 12),
+        _buildUiPositionCustomizer(isDark),
       ],
+    );
+  }
+
+  Widget _buildUiPositionCustomizer(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.drag_indicator_rounded, size: 18, color: FormaColors.primaryBlue),
+              const SizedBox(width: 8),
+              const Text(
+                'Mobile & Canvas Dock Button Order',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Drag items by the grip icon to reorder buttons in your editor dock:',
+            style: TextStyle(fontSize: 11, color: Colors.grey),
+          ),
+          const SizedBox(height: 12),
+          ReorderableListView(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            onReorder: (oldIdx, newIdx) {
+              setState(() {
+                if (oldIdx < newIdx) newIdx -= 1;
+                final item = _dockItems.removeAt(oldIdx);
+                _dockItems.insert(newIdx, item);
+              });
+            },
+            children: [
+              for (int i = 0; i < _dockItems.length; i++)
+                Container(
+                  key: ValueKey(_dockItems[i]),
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.drag_handle_rounded, size: 16, color: Colors.grey),
+                      const SizedBox(width: 10),
+                      Text(
+                        _dockItems[i],
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: FormaColors.primaryBlue.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'Pos ${i + 1}',
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: FormaColors.primaryBlue),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1393,26 +1494,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const Divider(height: 32),
 
-        // Roadmap & Future Releases Section
-        _buildSectionTitle('Roadmap & Future Releases', isDark),
+        // Roadmap & Future Releases Section (100% Offline & Local Engine)
+        _buildSectionTitle('Roadmap & Future Releases (Local First)', isDark),
         const SizedBox(height: 12),
         _buildRoadmapCard(
-          icon: Icons.auto_fix_high_rounded,
-          title: 'AI Sketch-to-Vector Synthesis',
+          icon: Icons.storage_rounded,
+          title: 'High-Speed SQLite Local Vault & Instant Rollback',
           description:
-              'Convert rough hand-drawn pencil sketches and wireframes into clean, mathematically optimized Bezier vector shapes and UI components using deep learning.',
+              'Crash-proof local disk persistence with microsecond project auto-snapshots, zero cloud reliance, and branching local history checkpoints.',
           score: 9.6,
           accentColor: const Color(0xFF10B981),
           isTop3: true,
           isDark: isDark,
         ),
         _buildRoadmapCard(
-          icon: Icons.groups_rounded,
-          title: 'Multi-User Live Collaboration Canvas',
+          icon: Icons.font_download_rounded,
+          title: 'Offline Custom Font (OTF/TTF) & Glyph Importer',
           description:
-              'Real-time peer-to-peer multiplayer canvas syncing with live presence cursors, shared selection rings, and simultaneous vector node editing.',
+              'Import desktop .ttf and .otf font files directly into local sandboxed storage with zero network dependencies and fast local glyph rasterization.',
           score: 9.4,
           accentColor: const Color(0xFF06B6D4),
+          isTop3: true,
+          isDark: isDark,
+        ),
+        _buildRoadmapCard(
+          icon: Icons.grain_rounded,
+          title: 'Procedural Geometric Pattern & Mesh Generator',
+          description:
+              'Mathematically generate seamless isometric grids, voronoi cells, dotted halftone arrays, and geometric guilloche vector waves completely offline.',
+          score: 9.2,
+          accentColor: const Color(0xFFF59E0B),
           isTop3: true,
           isDark: isDark,
         ),

@@ -8,16 +8,23 @@ import '../../../../app/theme/forma_colors.dart';
 import '../../controllers/editor_controller.dart';
 import '../../controllers/editor_state.dart';
 
-class LayersPanel extends ConsumerWidget {
+class LayersPanel extends ConsumerStatefulWidget {
   final ProjectModel project;
   final double? width;
 
   const LayersPanel({super.key, required this.project, this.width = 250});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(editorControllerProvider(project));
-    final controller = ref.read(editorControllerProvider(project).notifier);
+  ConsumerState<LayersPanel> createState() => _LayersPanelState();
+}
+
+class _LayersPanelState extends ConsumerState<LayersPanel> {
+  final Set<String> _collapsedFolderIds = {};
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(editorControllerProvider(widget.project));
+    final controller = ref.read(editorControllerProvider(widget.project).notifier);
     final page = state.project.getPage(state.activePageId);
 
     if (page == null) return const SizedBox.shrink();
@@ -25,7 +32,7 @@ class LayersPanel extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      width: width,
+      width: widget.width,
       decoration: BoxDecoration(
         color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
         border: Border(
@@ -39,7 +46,7 @@ class LayersPanel extends ConsumerWidget {
         children: [
           // Header with Quick Action Buttons
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
               children: [
                 Text(
@@ -72,25 +79,29 @@ class LayersPanel extends ConsumerWidget {
                   ),
                 ),
                 const Spacer(),
-                // Group Button
+                // New Folder Button
                 IconButton(
-                  icon: const Icon(Icons.folder_outlined, size: 15),
-                  tooltip: 'Group (Ctrl+G)',
+                  icon: const Icon(Icons.create_new_folder_outlined, size: 14),
+                  tooltip: 'New Folder',
                   visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.all(4),
-                  constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                  splashRadius: 14,
-                  onPressed: state.selectedNodeIds.length > 1
-                      ? controller.groupSelectedNodes
-                      : null,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                  splashRadius: 12,
+                  onPressed: () {
+                    controller.createNode(
+                      type: NodeType.group,
+                      rect: const Rect.fromLTWH(100, 100, 240, 240),
+                      name: 'New Folder ${state.project.nodes.length + 1}',
+                    );
+                  },
                 ),
                 // Add Layer / Node Popup Menu
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.add_box_outlined, size: 15),
+                  icon: const Icon(Icons.add_box_outlined, size: 14),
                   tooltip: 'Insert Node / Layer',
-                  padding: const EdgeInsets.all(4),
-                  constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                  splashRadius: 14,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                  splashRadius: 12,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   onSelected: (choice) => _insertNodeFromMenu(choice, controller, state),
                   itemBuilder: (ctx) => [
@@ -200,16 +211,16 @@ class LayersPanel extends ConsumerWidget {
                 IconButton(
                   icon: Icon(
                     Icons.delete_outline_rounded,
-                    size: 15,
+                    size: 14,
                     color: state.selectedNodeIds.isNotEmpty
                         ? FormaColors.dangerRed
                         : null,
                   ),
                   tooltip: 'Delete Selected',
                   visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.all(4),
-                  constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                  splashRadius: 14,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                  splashRadius: 12,
                   onPressed: state.selectedNodeIds.isNotEmpty
                       ? controller.deleteSelectedNodes
                       : null,
@@ -236,7 +247,7 @@ class LayersPanel extends ConsumerWidget {
                   )
                 : ReorderableListView.builder(
                     padding: const EdgeInsets.symmetric(vertical: 4),
-                    buildDefaultDragHandles: true,
+                    buildDefaultDragHandles: false,
                     itemCount: page.rootNodeIds.length,
                     onReorder: (oldIdx, newIdx) {
                       final len = page.rootNodeIds.length;
@@ -259,6 +270,7 @@ class LayersPanel extends ConsumerWidget {
                           node: node,
                           depth: 0,
                           layerNumber: layerNumber,
+                          reorderIndex: index,
                           state: state,
                           controller: controller,
                           isDark: isDark,
@@ -316,11 +328,16 @@ class LayersPanel extends ConsumerWidget {
     required DesignNode node,
     required int depth,
     int? layerNumber,
+    int? reorderIndex,
     required dynamic state,
     required EditorController controller,
     required bool isDark,
   }) {
     final isSelected = state.selectedNodeIds.contains(node.id);
+    final isFolder = node.type == NodeType.group ||
+        node.type == NodeType.frame ||
+        node.childrenIds.isNotEmpty;
+    final isCollapsed = _collapsedFolderIds.contains(node.id);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,7 +346,7 @@ class LayersPanel extends ConsumerWidget {
           onTap: () => controller.selectNode(node.id),
           child: Container(
             height: 36,
-            padding: EdgeInsets.only(left: 12.0 + (depth * 14.0), right: 8.0),
+            padding: EdgeInsets.only(left: 8.0 + (depth * 14.0), right: 6.0),
             color: isSelected
                 ? FormaColors.primaryBlue.withValues(
                     alpha: isDark ? 0.25 : 0.12,
@@ -337,6 +354,35 @@ class LayersPanel extends ConsumerWidget {
                 : Colors.transparent,
             child: Row(
               children: [
+                if (isFolder) ...[
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        if (isCollapsed) {
+                          _collapsedFolderIds.remove(node.id);
+                        } else {
+                          _collapsedFolderIds.add(node.id);
+                        }
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.all(2.0),
+                      child: Icon(
+                        isCollapsed
+                            ? Icons.keyboard_arrow_right_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        size: 15,
+                        color: isDark
+                            ? FormaColors.darkTextMuted
+                            : FormaColors.lightTextMuted,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                ] else ...[
+                  const SizedBox(width: 17),
+                ],
                 if (layerNumber != null) ...[
                   Container(
                     margin: const EdgeInsets.only(right: 6),
@@ -356,13 +402,17 @@ class LayersPanel extends ConsumerWidget {
                   ),
                 ],
                 Icon(
-                  _getNodeIcon(node.type),
+                  isFolder
+                      ? (isCollapsed ? Icons.folder_rounded : Icons.folder_open_rounded)
+                      : _getNodeIcon(node.type),
                   size: 15,
-                  color: isSelected
-                      ? FormaColors.primaryBlue
-                      : (isDark
-                            ? FormaColors.darkTextMuted
-                            : FormaColors.lightTextMuted),
+                  color: isFolder
+                      ? const Color(0xFFF59E0B)
+                      : (isSelected
+                          ? FormaColors.primaryBlue
+                          : (isDark
+                              ? FormaColors.darkTextMuted
+                              : FormaColors.lightTextMuted)),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -398,8 +448,8 @@ class LayersPanel extends ConsumerWidget {
                   splashRadius: 12,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(
-                    minWidth: 24,
-                    minHeight: 24,
+                    minWidth: 22,
+                    minHeight: 22,
                   ),
                   onPressed: () => controller.toggleLock(node.id),
                 ),
@@ -419,26 +469,41 @@ class LayersPanel extends ConsumerWidget {
                   splashRadius: 12,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(
-                    minWidth: 24,
-                    minHeight: 24,
+                    minWidth: 22,
+                    minHeight: 22,
                   ),
                   onPressed: () => controller.toggleVisibility(node.id),
                 ),
+                const SizedBox(width: 2),
+                if (reorderIndex != null)
+                  ReorderableDragStartListener(
+                    index: reorderIndex,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4.0),
+                      child: Icon(
+                        Icons.drag_indicator_rounded,
+                        size: 15,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
         ),
-        // Render child layers recursively
-        for (final childId in node.childrenIds) ...[
-          if (state.project.nodes[childId] != null)
-            _buildLayerItem(
-              context: context,
-              node: state.project.nodes[childId]!,
-              depth: depth + 1,
-              state: state,
-              controller: controller,
-              isDark: isDark,
-            ),
+        // Render child layers recursively if not collapsed (Windows style)
+        if (!isCollapsed) ...[
+          for (final childId in node.childrenIds) ...[
+            if (state.project.nodes[childId] != null)
+              _buildLayerItem(
+                context: context,
+                node: state.project.nodes[childId]!,
+                depth: depth + 1,
+                state: state,
+                controller: controller,
+                isDark: isDark,
+              ),
+          ],
         ],
       ],
     );

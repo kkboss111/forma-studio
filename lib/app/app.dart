@@ -13,6 +13,9 @@ class FormaApp extends ConsumerWidget {
     final notifier = ref.read(settingsProvider.notifier);
 
     ThemeMode mode;
+    ThemeData activeLightTheme = FormaTheme.light();
+    ThemeData activeDarkTheme = FormaTheme.dark();
+
     switch (settings.themeMode) {
       case FormaThemeMode.system:
         mode = ThemeMode.system;
@@ -26,9 +29,11 @@ class FormaApp extends ConsumerWidget {
       case FormaThemeMode.liquidGlass:
       case FormaThemeMode.glassmorphism:
         mode = ThemeMode.light;
+        activeLightTheme = FormaTheme.glassmorphism();
         break;
       case FormaThemeMode.cyberpunk:
         mode = ThemeMode.dark;
+        activeDarkTheme = FormaTheme.cyberpunk();
         break;
     }
 
@@ -40,8 +45,8 @@ class FormaApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Forma Studio v0.1 (Beta Testing)',
       debugShowCheckedModeBanner: false,
-      theme: FormaTheme.light(),
-      darkTheme: FormaTheme.dark(),
+      theme: activeLightTheme,
+      darkTheme: activeDarkTheme,
       themeMode: mode,
       home: SplashScreen(
         onToggleTheme: () {

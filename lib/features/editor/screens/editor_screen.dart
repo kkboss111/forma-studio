@@ -25,6 +25,7 @@ import '../widgets/prototype/prototype_player.dart';
 import '../widgets/dialogs/export_dialog.dart';
 import '../widgets/dialogs/color_picker_dialog.dart';
 import '../widgets/dialogs/command_palette.dart';
+import '../widgets/panels/timeline_panel.dart';
 
 class EditorScreen extends ConsumerStatefulWidget {
   final ProjectModel project;
@@ -35,12 +36,32 @@ class EditorScreen extends ConsumerStatefulWidget {
   ConsumerState<EditorScreen> createState() => _EditorScreenState();
 }
 
-class _EditorScreenState extends ConsumerState<EditorScreen> {
+class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBindingObserver {
   final FocusNode _focusNode = FocusNode();
   bool _showLayersSheet = false;
   bool _showPropertiesSheet = false;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState == AppLifecycleState.paused ||
+        lifecycleState == AppLifecycleState.inactive ||
+        lifecycleState == AppLifecycleState.hidden) {
+      ref.read(editorControllerProvider(widget.project).notifier).saveNow();
+    }
+  }
+
   Future<void> _returnToHome(BuildContext context) async {
+    await ref.read(editorControllerProvider(widget.project).notifier).saveNow();
+    if (!context.mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -57,6 +78,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _focusNode.dispose();
     super.dispose();
   }
@@ -472,7 +494,31 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
                             // Center Canvas (Full screen on phones & landscape mobile)
                             Expanded(
-                              child: CanvasViewport(project: widget.project),
+                              child: Column(
+                                children: [
+                                  Expanded(
+                                    child: CanvasViewport(project: widget.project),
+                                  ),
+                                  if (state.showTimelinePanel)
+                                    TimelinePanel(
+                                      timeline: state.timeline,
+                                      currentTimeMs: state.currentTimelineMs,
+                                      isPlaying: state.isPlayingTimeline,
+                                      selectedNodeId: state.primarySelectedId,
+                                      onTogglePlay: () => controller.togglePlayAnimation(),
+                                      onScrub: (ms) => controller.setTimelineScrub(ms),
+                                      onAddKeyframe: (prop) => controller.addKeyframeForSelectedNode(property: prop),
+                                      onDeleteKeyframe: () => controller.deleteKeyframeAtPlayhead(),
+                                      onToggleLoop: () => controller.toggleTimelineLoop(),
+                                      onFpsChanged: (fps) => controller.setTimelineFps(fps),
+                                      onSnapPrev: () => controller.snapToPrevKeyframe(),
+                                      onSnapNext: () => controller.snapToNextKeyframe(),
+                                      onUpdateKeyframe: (nodeId, prop, idx, kf) => controller.updateKeyframe(nodeId, prop, idx, kf),
+                                      onAddMotionPreset: (preset) => controller.addQuickMotionPreset(preset),
+                                      onClose: () => controller.toggleTimelinePanel(),
+                                    ),
+                                ],
+                              ),
                             ),
 
                             // Right Inspector Panel or Properties Panel (Tablets & Desktop)
@@ -1133,32 +1179,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         size: 36,
         iconSize: 17,
       ),
-      _toolButton(
-        EditorTool.rectangle,
-        Icons.crop_square_rounded,
-        'Rect',
-        state,
-        controller,
+      NeuIconButton(
+        icon: Icons.category_rounded,
         size: 36,
         iconSize: 17,
-      ),
-      _toolButton(
-        EditorTool.triangle,
-        Icons.change_history_rounded,
-        'Triangle',
-        state,
-        controller,
-        size: 36,
-        iconSize: 17,
-      ),
-      _toolButton(
-        EditorTool.ellipse,
-        Icons.circle_outlined,
-        'Oval',
-        state,
-        controller,
-        size: 36,
-        iconSize: 17,
+        tooltip: 'Shapes Menu',
+        onPressed: () => _showMobileShapesMenu(context, controller),
       ),
       _toolButton(
         EditorTool.vectorPen,
@@ -1185,42 +1211,34 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         tooltip: 'Insert Image',
         onPressed: () => _handleInsertImage(controller),
       ),
-      if (state.selectedNodeIds.isEmpty) ...[
-        GestureDetector(
-          onTap: () {
-            final page = state.project.getPage(state.activePageId);
-            if (page != null) {
-              ColorPickerDialog.show(
-                context,
-                initialColor: page.backgroundColor,
-                onColorChanged: (c) {
-                  final updatedPage = page.copyWith(backgroundColor: c);
-                  final pages = state.project.pages
-                      .map((p) => p.id == page.id ? updatedPage : p)
-                      .toList();
-                  controller.updatePages(pages);
-                },
-              );
-            }
-          },
-          child: Container(
-            width: 28,
-            height: 28,
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            decoration: BoxDecoration(
-              color: state.project.getPage(state.activePageId)?.backgroundColor ?? Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  blurRadius: 4,
-                ),
-              ],
-            ),
+      GestureDetector(
+        onTap: () {
+          final page = state.project.getPage(state.activePageId);
+          if (page != null) {
+            ColorPickerDialog.show(
+              context,
+              initialColor: page.backgroundColor,
+              onColorChanged: (c) => controller.setPageBackgroundColor(c),
+            );
+          }
+        },
+        child: Container(
+          width: 28,
+          height: 28,
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: state.project.getPage(state.activePageId)?.backgroundColor ?? Colors.white,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 4,
+              ),
+            ],
           ),
         ),
-      ],
+      ),
       _toolButton(
         EditorTool.hand,
         Icons.pan_tool_rounded,
@@ -1377,5 +1395,106 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         ),
       );
     }
+  }
+
+  void _showMobileShapesMenu(BuildContext context, EditorController controller) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border.all(
+              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'SHAPE TOOLS',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.8,
+                      color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              GridView.count(
+                shrinkWrap: true,
+                crossAxisCount: 4,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                children: [
+                  _shapeOption(ctx, controller, EditorTool.rectangle, Icons.crop_square_rounded, 'Rectangle'),
+                  _shapeOption(ctx, controller, EditorTool.roundedRectangle, Icons.rounded_corner_rounded, 'Rounded'),
+                  _shapeOption(ctx, controller, EditorTool.triangle, Icons.change_history_rounded, 'Triangle'),
+                  _shapeOption(ctx, controller, EditorTool.ellipse, Icons.circle_outlined, 'Circle'),
+                  _shapeOption(ctx, controller, EditorTool.polygon, Icons.hexagon_outlined, 'Polygon'),
+                  _shapeOption(ctx, controller, EditorTool.star, Icons.star_border_rounded, 'Star'),
+                  _shapeOption(ctx, controller, EditorTool.line, Icons.horizontal_rule_rounded, 'Line'),
+                  _shapeOption(ctx, controller, EditorTool.frame, Icons.crop_free_rounded, 'Frame'),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _shapeOption(
+    BuildContext ctx,
+    EditorController controller,
+    EditorTool tool,
+    IconData icon,
+    String label,
+  ) {
+    return InkWell(
+      onTap: () {
+        controller.setTool(tool);
+        Navigator.pop(ctx);
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: FormaColors.primaryBlue.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: FormaColors.primaryBlue.withValues(alpha: 0.18)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 22, color: FormaColors.primaryBlue),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

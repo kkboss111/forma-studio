@@ -496,8 +496,6 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
             now.difference(_lastTapTime!).inMilliseconds < 350) {
           if (hitNode.type == NodeType.text) {
             _showInPlaceTextEditor(context, hitNode, controller);
-          } else {
-            controller.enterVectorEditMode(hitNode.id);
           }
           _lastTapNodeId = null;
           _lastTapTime = null;

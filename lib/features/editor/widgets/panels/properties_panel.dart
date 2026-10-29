@@ -97,11 +97,49 @@ class PropertiesPanel extends ConsumerWidget {
             _buildEffectsSection(context, primaryNode, controller, isDark),
             const Divider(height: 24),
 
+            // Vector Path Section (Explicit Edit button so double-clicking doesn't accidentally trigger)
+            _buildVectorPathSection(context, primaryNode, controller, isDark),
+            const Divider(height: 24),
+
             // WCAG Contrast Badge
             _buildContrastChecker(context, primaryNode, state, isDark),
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildVectorPathSection(
+    BuildContext context,
+    DesignNode node,
+    EditorController controller,
+    bool isDark,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('VECTOR CONTROLS', isDark),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: FormaColors.primaryBlue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            icon: const Icon(Icons.polyline_rounded, size: 18),
+            label: const Text(
+              'Edit Vector Path',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+            onPressed: () => controller.enterVectorEditMode(node.id),
+          ),
+        ),
+      ],
     );
   }
 
@@ -137,13 +175,7 @@ class PropertiesPanel extends ConsumerWidget {
                 ColorPickerDialog.show(
                   context,
                   initialColor: page.backgroundColor,
-                  onColorChanged: (c) {
-                    final updatedPage = page.copyWith(backgroundColor: c);
-                    final pages = state.project.pages
-                        .map((p) => p.id == page.id ? updatedPage : p)
-                        .toList();
-                    controller.updatePages(pages);
-                  },
+                  onColorChanged: (c) => controller.setPageBackgroundColor(c),
                 );
               },
               child: Container(
@@ -174,13 +206,7 @@ class PropertiesPanel extends ConsumerWidget {
           ].map((c) {
             final isSelected = page.backgroundColor.toARGB32() == c.toARGB32();
             return GestureDetector(
-              onTap: () {
-                final updatedPage = page.copyWith(backgroundColor: c);
-                final pages = state.project.pages
-                    .map((p) => p.id == page.id ? updatedPage : p)
-                    .toList();
-                controller.updatePages(pages);
-              },
+              onTap: () => controller.setPageBackgroundColor(c),
               child: Container(
                 width: 24,
                 height: 24,
