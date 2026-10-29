@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../../app/theme/forma_colors.dart';
 import '../../../../app/theme/neumorphic.dart';
@@ -61,6 +62,20 @@ class _CommandPaletteDialogState extends State<CommandPaletteDialog> {
         icon: Icons.crop_square_rounded,
         shortcut: 'R',
         action: () => c.setTool(EditorTool.rectangle),
+      ),
+      CommandItem(
+        title: 'Draw Triangle',
+        subtitle: 'Create a 3-corner triangle with corner fillets',
+        icon: Icons.change_history_rounded,
+        shortcut: 'Y',
+        action: () => c.setTool(EditorTool.triangle),
+      ),
+      CommandItem(
+        title: 'Vector Pen Tool',
+        subtitle: 'Draft multi-point Bézier vector curves and paths',
+        icon: Icons.polyline_rounded,
+        shortcut: 'P',
+        action: () => c.setTool(EditorTool.vectorPen),
       ),
       CommandItem(
         title: 'Draw Ellipse',
@@ -177,12 +192,19 @@ class _CommandPaletteDialogState extends State<CommandPaletteDialog> {
               )
               .toList();
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Dialog(
       backgroundColor: Colors.transparent,
       alignment: Alignment.topCenter,
-      insetPadding: const EdgeInsets.only(top: 80, left: 24, right: 24),
+      insetPadding: EdgeInsets.only(
+        top: math.min(80.0, screenHeight * 0.1),
+        left: 16,
+        right: 16,
+      ),
       child: NeuCard(
-        width: 480,
+        width: math.min(screenWidth - 32, 480),
         radius: 20,
         padding: const EdgeInsets.all(16),
         child: Column(

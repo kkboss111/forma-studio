@@ -679,12 +679,15 @@ class UniversalFormatService {
       case SupportedFormat.figma:
       case SupportedFormat.sketch:
       case SupportedFormat.adobeXd:
-        // Package inside portable ZIP container with canvas tree & metadata
+        // Package inside portable ZIP container with canvas tree, metadata & vector SVG
         final archive = Archive();
         final jsonStr = jsonEncode(project.toJson());
         final dataBytes = Uint8List.fromList(encoder.encode(jsonStr));
         archive.addFile(ArchiveFile('canvas.json', dataBytes.length, dataBytes));
         archive.addFile(ArchiveFile('metadata.json', dataBytes.length, dataBytes));
+        final svgStr = SvgExporter.exportPage(project, pageId, frameId: frameId);
+        final svgBytes = Uint8List.fromList(encoder.encode(svgStr));
+        archive.addFile(ArchiveFile('vector.svg', svgBytes.length, svgBytes));
         final zipBytes = ZipEncoder().encode(archive);
         return Uint8List.fromList(zipBytes);
 

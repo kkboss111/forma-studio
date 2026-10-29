@@ -470,6 +470,22 @@ class EditorController extends StateNotifier<EditorState> {
     updatePages(updatedPages);
   }
 
+  void bringToFront() {
+    if (state.selectedNodeIds.isEmpty) return;
+    final page = state.project.getPage(state.activePageId);
+    if (page == null) return;
+    final roots = List<String>.from(page.rootNodeIds);
+    for (final id in state.selectedNodeIds) {
+      if (roots.remove(id)) {
+        roots.add(id);
+      }
+    }
+    final updatedPages = state.project.pages
+        .map((p) => p.id == page.id ? p.copyWith(rootNodeIds: roots) : p)
+        .toList();
+    updatePages(updatedPages);
+  }
+
   void sendBackward() {
     if (state.selectedNodeIds.isEmpty) return;
     final page = state.project.getPage(state.activePageId);
@@ -486,6 +502,39 @@ class EditorController extends StateNotifier<EditorState> {
         .map((p) => p.id == page.id ? p.copyWith(rootNodeIds: roots) : p)
         .toList();
     updatePages(updatedPages);
+  }
+
+  void sendToBack() {
+    if (state.selectedNodeIds.isEmpty) return;
+    final page = state.project.getPage(state.activePageId);
+    if (page == null) return;
+    final roots = List<String>.from(page.rootNodeIds);
+    for (final id in state.selectedNodeIds.toList().reversed) {
+      if (roots.remove(id)) {
+        roots.insert(0, id);
+      }
+    }
+    final updatedPages = state.project.pages
+        .map((p) => p.id == page.id ? p.copyWith(rootNodeIds: roots) : p)
+        .toList();
+    updatePages(updatedPages);
+  }
+
+  void reorderRootNodes(int oldIndex, int newIndex) {
+    final page = state.project.getPage(state.activePageId);
+    if (page == null) return;
+    final roots = List<String>.from(page.rootNodeIds);
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    if (oldIndex >= 0 && oldIndex < roots.length && newIndex >= 0 && newIndex <= roots.length) {
+      final item = roots.removeAt(oldIndex);
+      roots.insert(newIndex, item);
+      final updatedPages = state.project.pages
+          .map((p) => p.id == page.id ? p.copyWith(rootNodeIds: roots) : p)
+          .toList();
+      updatePages(updatedPages);
+    }
   }
 
   // --- Alignment & Distribution ---

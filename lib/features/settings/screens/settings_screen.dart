@@ -81,7 +81,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (mode == settings.themeMode) return;
 
     if (mode == FormaThemeMode.liquidGlass) {
-      final pin = await _showPasscodeDialog(context);
+      final pin = await _showPasscodeDialog(
+        context,
+        'Liquid Glass Passcode',
+        'Liquid Glass Mode',
+      );
       if (pin == '1111') {
         notifier.setThemeMode(FormaThemeMode.liquidGlass);
         if (mounted) {
@@ -97,9 +101,63 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                'Incorrect passcode. Please enter the valid security PIN.',
-              ),
+              content: Text('Incorrect passcode. Please enter the valid security PIN.'),
+              backgroundColor: FormaColors.dangerRed,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } else if (mode == FormaThemeMode.glassmorphism) {
+      final pin = await _showPasscodeDialog(
+        context,
+        'Glassmorphism Passcode',
+        'Glassmorphism Frost Mode',
+      );
+      if (pin == '2222') {
+        notifier.setThemeMode(FormaThemeMode.glassmorphism);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Passcode verified! Glassmorphism Frost Mode activated.'),
+              backgroundColor: FormaColors.successGreen,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else if (pin != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Incorrect passcode. Please enter the valid security PIN.'),
+              backgroundColor: FormaColors.dangerRed,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } else if (mode == FormaThemeMode.cyberpunk) {
+      final pin = await _showPasscodeDialog(
+        context,
+        'Cyberpunk Neon Passcode',
+        'Cyberpunk Neon Mode',
+      );
+      if (pin == '4444') {
+        notifier.setThemeMode(FormaThemeMode.cyberpunk);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Passcode verified! Cyberpunk Neon Mode activated.'),
+              backgroundColor: FormaColors.successGreen,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else if (pin != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Incorrect passcode. Please enter the valid security PIN.'),
               backgroundColor: FormaColors.dangerRed,
               duration: Duration(seconds: 3),
             ),
@@ -111,26 +169,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<String?> _showPasscodeDialog(BuildContext context) async {
+  Future<String?> _showPasscodeDialog(
+    BuildContext context,
+    String title,
+    String targetMode,
+  ) async {
     final controller = TextEditingController();
     return showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.lock_outline_rounded, color: FormaColors.primaryBlue),
-            SizedBox(width: 8),
-            Text('Liquid Glass Passcode', style: TextStyle(fontSize: 16)),
+            const Icon(Icons.lock_outline_rounded, color: FormaColors.primaryBlue),
+            const SizedBox(width: 8),
+            Text(title, style: const TextStyle(fontSize: 16)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Enter the 4-digit security PIN to activate Liquid Glass Mode:',
-              style: TextStyle(fontSize: 12.5),
+            Text(
+              'Enter the 4-digit security PIN to activate $targetMode:',
+              style: const TextStyle(fontSize: 12.5),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -161,19 +223,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(null),
+            onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: FormaColors.primaryBlue,
-              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
             onPressed: () => Navigator.of(ctx).pop(controller.text),
-            child: const Text('Unlock'),
+            child: const Text(
+              'Verify PIN',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -608,6 +675,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               case FormaThemeMode.liquidGlass:
                 label = 'Liquid Glass';
                 icon = Icons.blur_on_rounded;
+                break;
+              case FormaThemeMode.glassmorphism:
+                label = 'Glassmorphism Frost';
+                icon = Icons.auto_awesome_rounded;
+                break;
+              case FormaThemeMode.cyberpunk:
+                label = 'Cyberpunk Neon';
+                icon = Icons.electric_bolt_rounded;
                 break;
             }
 
@@ -1322,6 +1397,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildSectionTitle('Roadmap & Future Releases', isDark),
         const SizedBox(height: 12),
         _buildRoadmapCard(
+          icon: Icons.auto_fix_high_rounded,
+          title: 'AI Sketch-to-Vector Synthesis',
+          description:
+              'Convert rough hand-drawn pencil sketches and wireframes into clean, mathematically optimized Bezier vector shapes and UI components using deep learning.',
+          score: 9.6,
+          accentColor: const Color(0xFF10B981),
+          isTop3: true,
+          isDark: isDark,
+        ),
+        _buildRoadmapCard(
+          icon: Icons.groups_rounded,
+          title: 'Multi-User Live Collaboration Canvas',
+          description:
+              'Real-time peer-to-peer multiplayer canvas syncing with live presence cursors, shared selection rings, and simultaneous vector node editing.',
+          score: 9.4,
+          accentColor: const Color(0xFF06B6D4),
+          isTop3: true,
+          isDark: isDark,
+        ),
+        _buildRoadmapCard(
           icon: Icons.movie_creation_rounded,
           title: 'Animation Tool & Timeline',
           description:
@@ -1332,13 +1427,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           isDark: isDark,
         ),
         _buildRoadmapCard(
-          icon: Icons.gesture_rounded,
-          title: 'Vector Tool (Bézier Pen & Anchor Points)',
+          icon: Icons.view_in_ar_rounded,
+          title: '3D Mesh & Depth Extrusion Engine',
           description:
-              'Full multi-point Bézier vector pen tool with interactive tangent handles, corner rounding, closed-path auto-snapping, and boolean operations.',
-          score: 9.1,
-          accentColor: const Color(0xFF10B981),
-          isTop3: true,
+              'Real-time 3D extrusion of 2D vector shapes, customizable bevel angles, dynamic lighting, material roughness/metallic shaders, and glTF / OBJ export.',
+          score: 9.0,
+          accentColor: const Color(0xFFF59E0B),
           isDark: isDark,
         ),
         _buildRoadmapCard(
@@ -1348,7 +1442,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               'Clean semantic HTML5 markup generation with responsive CSS linear/radial gradients, multi-layer drop shadows, and web fonts.',
           score: 8.8,
           accentColor: const Color(0xFF8B5CF6),
-          isTop3: true,
           isDark: isDark,
         ),
         _buildRoadmapCard(

@@ -12,6 +12,7 @@ enum EditorTool {
   rectangle,
   roundedRectangle,
   ellipse,
+  triangle,
   line,
   arrow,
   polygon,

@@ -840,6 +840,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             controller,
           ),
           _toolButton(
+            EditorTool.triangle,
+            Icons.change_history_rounded,
+            'Triangle',
+            state,
+            controller,
+          ),
+          _toolButton(
             EditorTool.ellipse,
             Icons.circle_outlined,
             'Ellipse (O)',
@@ -871,6 +878,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             EditorTool.star,
             Icons.star_border_rounded,
             'Star',
+            state,
+            controller,
+          ),
+          _toolButton(
+            EditorTool.vectorPen,
+            Icons.polyline_rounded,
+            'Vector Pen (P)',
             state,
             controller,
           ),
@@ -1077,7 +1091,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       top: 12,
       left: 16,
       right: 16,
-      child: Center(child: barContent),
+      child: Center(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: barContent,
+        ),
+      ),
     );
   }
 
@@ -1124,9 +1143,27 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         iconSize: 17,
       ),
       _toolButton(
+        EditorTool.triangle,
+        Icons.change_history_rounded,
+        'Triangle',
+        state,
+        controller,
+        size: 36,
+        iconSize: 17,
+      ),
+      _toolButton(
         EditorTool.ellipse,
         Icons.circle_outlined,
         'Oval',
+        state,
+        controller,
+        size: 36,
+        iconSize: 17,
+      ),
+      _toolButton(
+        EditorTool.vectorPen,
+        Icons.polyline_rounded,
+        'Pen',
         state,
         controller,
         size: 36,
@@ -1148,6 +1185,42 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         tooltip: 'Insert Image',
         onPressed: () => _handleInsertImage(controller),
       ),
+      if (state.selectedNodeIds.isEmpty) ...[
+        GestureDetector(
+          onTap: () {
+            final page = state.project.getPage(state.activePageId);
+            if (page != null) {
+              ColorPickerDialog.show(
+                context,
+                initialColor: page.backgroundColor,
+                onColorChanged: (c) {
+                  final updatedPage = page.copyWith(backgroundColor: c);
+                  final pages = state.project.pages
+                      .map((p) => p.id == page.id ? updatedPage : p)
+                      .toList();
+                  controller.updatePages(pages);
+                },
+              );
+            }
+          },
+          child: Container(
+            width: 28,
+            height: 28,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              color: state.project.getPage(state.activePageId)?.backgroundColor ?? Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 4,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
       _toolButton(
         EditorTool.hand,
         Icons.pan_tool_rounded,
@@ -1186,12 +1259,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             hasSpecular: settings.glassSpecular,
             hasSheen: settings.glassSheen,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: dockContent,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: dockContent,
+            ),
           )
         : NeuCard(
             radius: 24,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: dockContent,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: dockContent,
+            ),
           );
 
     return Positioned(

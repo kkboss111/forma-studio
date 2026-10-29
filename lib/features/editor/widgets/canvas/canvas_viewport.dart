@@ -240,8 +240,8 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
 
               // 4. Floating Zoom & Viewport Navigation HUD
               Positioned(
-                bottom: 24,
-                right: 20,
+                bottom: constraints.maxWidth < 650 ? 76 : 24,
+                right: constraints.maxWidth < 650 ? 14 : 20,
                 child: NeuCard(
                   radius: 16,
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -627,11 +627,28 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
       final nodeId = state.selectedNodeIds.first;
       final node = state.project.nodes[nodeId];
       if (node != null && _activeHandle != null) {
-        final newBounds = _calculateResizedRect(
+        Rect newBounds = _calculateResizedRect(
           _originalNodeBounds!,
           _activeHandle!,
           deltaDoc,
         );
+        if (HardwareKeyboard.instance.isShiftPressed &&
+            (_activeHandle == ResizeHandleType.topLeft ||
+                _activeHandle == ResizeHandleType.topRight ||
+                _activeHandle == ResizeHandleType.bottomLeft ||
+                _activeHandle == ResizeHandleType.bottomRight)) {
+          final aspect = _originalNodeBounds!.width /
+              (_originalNodeBounds!.height == 0 ? 1 : _originalNodeBounds!.height);
+          final maxSide = math.max(newBounds.width, newBounds.height);
+          final constrainedW = aspect >= 1.0 ? maxSide : maxSide * aspect;
+          final constrainedH = aspect >= 1.0 ? maxSide / aspect : maxSide;
+          newBounds = Rect.fromLTWH(
+            newBounds.left,
+            newBounds.top,
+            constrainedW,
+            constrainedH,
+          );
+        }
         final updated = node.copyWith(
           x: newBounds.left,
           y: newBounds.top,
@@ -672,7 +689,15 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
         controller.selectNodes(selectedIds);
       }
     } else if (state.dragMode == DragMode.drawingNode) {
-      final drawRect = Rect.fromPoints(_dragStartDoc!, currentDoc);
+      Rect drawRect = Rect.fromPoints(_dragStartDoc!, currentDoc);
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        final w = currentDoc.dx - _dragStartDoc!.dx;
+        final h = currentDoc.dy - _dragStartDoc!.dy;
+        final side = math.max(w.abs(), h.abs());
+        final endX = _dragStartDoc!.dx + side * (w < 0 ? -1 : 1);
+        final endY = _dragStartDoc!.dy + side * (h < 0 ? -1 : 1);
+        drawRect = Rect.fromPoints(_dragStartDoc!, Offset(endX, endY));
+      }
       setState(() => _currentMarquee = drawRect);
     }
   }
@@ -687,7 +712,15 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
         state.dragMode == DragMode.drawingNode &&
         state.activeTool != EditorTool.vectorPen) {
       final endDoc = transform.screenToDoc(event.localPosition);
-      final rawRect = Rect.fromPoints(_dragStartDoc!, endDoc);
+      Rect rawRect = Rect.fromPoints(_dragStartDoc!, endDoc);
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        final w = endDoc.dx - _dragStartDoc!.dx;
+        final h = endDoc.dy - _dragStartDoc!.dy;
+        final side = math.max(w.abs(), h.abs());
+        final endX = _dragStartDoc!.dx + side * (w < 0 ? -1 : 1);
+        final endY = _dragStartDoc!.dy + side * (h < 0 ? -1 : 1);
+        rawRect = Rect.fromPoints(_dragStartDoc!, Offset(endX, endY));
+      }
       final finalRect = Rect.fromLTWH(
         rawRect.left,
         rawRect.top,
@@ -696,7 +729,13 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
       );
 
       final nodeType = _nodeTypeForTool(state.activeTool);
-      controller.createNode(type: nodeType, rect: finalRect);
+      final isTriangle = state.activeTool == EditorTool.triangle;
+      controller.createNode(
+        type: nodeType,
+        rect: finalRect,
+        polygonSides: isTriangle ? 3 : (nodeType == NodeType.polygon ? 5 : null),
+        name: isTriangle ? 'Triangle ${state.project.nodes.length + 1}' : null,
+      );
     } else if (state.dragMode == DragMode.movingNodes &&
         _originalNodePositions != null) {
       // Commit final move positions
@@ -794,6 +833,7 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
         return NodeType.line;
       case EditorTool.arrow:
         return NodeType.arrow;
+      case EditorTool.triangle:
       case EditorTool.polygon:
         return NodeType.polygon;
       case EditorTool.star:

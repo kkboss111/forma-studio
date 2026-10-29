@@ -276,7 +276,7 @@ class NodeRenderService {
       case NodeType.ellipse:
         return Path()..addOval(rect);
       case NodeType.polygon:
-        return _getPolygonPath(rect, node.polygonSides);
+        return _getPolygonPath(rect, node.polygonSides, cornerRadius: node.cornerRadii.uniformValue);
       case NodeType.star:
         return _getStarPath(rect, node.starPoints, node.starInnerRadiusRatio);
       case NodeType.vectorPath:
@@ -517,7 +517,8 @@ class NodeRenderService {
         break;
 
       case NodeType.polygon:
-        final path = _getPolygonPath(rect, node.polygonSides);
+        final r = node.cornerRadii.uniformValue;
+        final path = _getPolygonPath(rect, node.polygonSides, cornerRadius: r);
         canvas.drawPath(path, paint);
         break;
 
@@ -749,22 +750,56 @@ class NodeRenderService {
     fillPainter.paint(canvas, rect.topLeft);
   }
 
-  static Path _getPolygonPath(Rect rect, int sides) {
+  static Path _getPolygonPath(Rect rect, int sides, {double cornerRadius = 0}) {
     final path = Path();
     final cx = rect.center.dx;
     final cy = rect.center.dy;
     final rx = rect.width / 2;
     final ry = rect.height / 2;
 
+    final vertices = <Offset>[];
     for (int i = 0; i < sides; i++) {
       final angle = -math.pi / 2 + (2 * math.pi * i) / sides;
       final px = cx + rx * math.cos(angle);
       final py = cy + ry * math.sin(angle);
-      if (i == 0) {
-        path.moveTo(px, py);
-      } else {
-        path.lineTo(px, py);
+      vertices.add(Offset(px, py));
+    }
+
+    if (cornerRadius <= 0 || vertices.length < 3) {
+      for (int i = 0; i < vertices.length; i++) {
+        if (i == 0) {
+          path.moveTo(vertices[i].dx, vertices[i].dy);
+        } else {
+          path.lineTo(vertices[i].dx, vertices[i].dy);
+        }
       }
+      path.close();
+      return path;
+    }
+
+    // Fillet each corner with quadratic bezier curves
+    for (int i = 0; i < vertices.length; i++) {
+      final prev = vertices[(i - 1 + vertices.length) % vertices.length];
+      final curr = vertices[i];
+      final next = vertices[(i + 1) % vertices.length];
+
+      final vPrev = prev - curr;
+      final vNext = next - curr;
+      final dPrev = vPrev.distance;
+      final dNext = vNext.distance;
+
+      final maxR = math.min(dPrev, dNext) / 2.0;
+      final r = math.min(cornerRadius, maxR);
+
+      final pStart = curr + (vPrev / (dPrev == 0 ? 1 : dPrev)) * r;
+      final pEnd = curr + (vNext / (dNext == 0 ? 1 : dNext)) * r;
+
+      if (i == 0) {
+        path.moveTo(pStart.dx, pStart.dy);
+      } else {
+        path.lineTo(pStart.dx, pStart.dy);
+      }
+      path.quadraticBezierTo(curr.dx, curr.dy, pEnd.dx, pEnd.dy);
     }
     path.close();
     return path;

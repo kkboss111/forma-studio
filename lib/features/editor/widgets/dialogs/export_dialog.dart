@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -291,7 +292,7 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
       child: Material(
         color: Colors.transparent,
         child: Container(
-          width: 440,
+          width: math.min(size.width - 24, 440),
           constraints: BoxConstraints(maxHeight: size.height * 0.92),
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(

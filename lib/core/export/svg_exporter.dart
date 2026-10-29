@@ -76,12 +76,13 @@ class SvgExporter {
   }
 
   static void _writeDefs(StringBuffer buffer, ProjectModel project) {
-    // Generate linear gradient definitions if present
+    // Generate linear & radial gradient and shadow filter definitions
     for (final node in project.nodes.values) {
       for (int i = 0; i < node.fills.length; i++) {
         final fill = node.fills[i];
         if (fill.type == DesignFillType.linearGradient &&
-            fill.gradientColors != null) {
+            fill.gradientColors != null &&
+            fill.gradientColors!.isNotEmpty) {
           final gradId = 'grad_${node.id}_$i';
           buffer.writeln(
             '    <linearGradient id="$gradId" x1="0%" y1="0%" x2="100%" y2="100%">',
@@ -94,6 +95,31 @@ class SvgExporter {
             );
           }
           buffer.writeln('    </linearGradient>');
+        } else if (fill.type == DesignFillType.radialGradient &&
+            fill.gradientColors != null &&
+            fill.gradientColors!.isNotEmpty) {
+          final gradId = 'radial_grad_${node.id}_$i';
+          buffer.writeln(
+            '    <radialGradient id="$gradId" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">',
+          );
+          final colors = fill.gradientColors!;
+          for (int c = 0; c < colors.length; c++) {
+            final offset = (c / (colors.length - 1) * 100).toStringAsFixed(0);
+            buffer.writeln(
+              '      <stop offset="$offset%" stop-color="${_colorToHex(colors[c])}" />',
+            );
+          }
+          buffer.writeln('    </radialGradient>');
+        }
+      }
+
+      for (int i = 0; i < node.effects.length; i++) {
+        final eff = node.effects[i];
+        if (eff.isVisible && eff.type == DesignEffectType.dropShadow) {
+          final filterId = 'shadow_${node.id}_$i';
+          buffer.writeln('    <filter id="$filterId" x="-25%" y="-25%" width="150%" height="150%">');
+          buffer.writeln('      <feDropShadow dx="${eff.offsetX}" dy="${eff.offsetY}" stdDeviation="${eff.blurRadius / 2}" flood-color="${_colorToHex(eff.color)}" flood-opacity="${eff.color.a}" />');
+          buffer.writeln('    </filter>');
         }
       }
     }
@@ -111,6 +137,14 @@ class SvgExporter {
         : '';
     final opacityStr = node.opacity < 1.0 ? ' opacity="${node.opacity}"' : '';
 
+    String filterStr = '';
+    final dropShadowIdx = node.effects.indexWhere(
+      (e) => e.isVisible && e.type == DesignEffectType.dropShadow,
+    );
+    if (dropShadowIdx >= 0) {
+      filterStr = ' filter="url(#shadow_${node.id}_$dropShadowIdx)"';
+    }
+
     String fillStr = 'none';
     if (node.fills.isNotEmpty && node.fills.first.isVisible) {
       final f = node.fills.first;
@@ -118,6 +152,8 @@ class SvgExporter {
         fillStr = _colorToHex(f.color);
       } else if (f.type == DesignFillType.linearGradient) {
         fillStr = 'url(#grad_${node.id}_0)';
+      } else if (f.type == DesignFillType.radialGradient) {
+        fillStr = 'url(#radial_grad_${node.id}_0)';
       }
     }
 
@@ -128,15 +164,55 @@ class SvgExporter {
     }
 
     switch (node.type) {
-      case NodeType.rectangle:
       case NodeType.frame:
+        final rxStr = node.cornerRadii.uniformValue > 0
+            ? ' rx="${node.cornerRadii.uniformValue}" ry="${node.cornerRadii.uniformValue}"'
+            : '';
+        buffer.writeln(
+          '  <rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" fill="$fillStr"$strokeStr$rxStr$transformStr$opacityStr$filterStr />',
+        );
+        for (final childId in node.childrenIds) {
+          final child = project.nodes[childId];
+          if (child != null) {
+            _writeNode(buffer, child, project);
+          }
+        }
+        return;
+
+      case NodeType.group:
+        buffer.writeln('  <g id="${node.id}"$transformStr$opacityStr>');
+        for (final childId in node.childrenIds) {
+          final child = project.nodes[childId];
+          if (child != null) {
+            _writeNode(buffer, child, project);
+          }
+        }
+        buffer.writeln('  </g>');
+        return;
+
+      case NodeType.rectangle:
       case NodeType.annotationSection:
         final rxStr = node.cornerRadii.uniformValue > 0
             ? ' rx="${node.cornerRadii.uniformValue}" ry="${node.cornerRadii.uniformValue}"'
             : '';
         buffer.writeln(
-          '  <rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" fill="$fillStr"$strokeStr$rxStr$transformStr$opacityStr />',
+          '  <rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" fill="$fillStr"$strokeStr$rxStr$transformStr$opacityStr$filterStr />',
         );
+        break;
+
+      case NodeType.image:
+        final b64 = node.imagePath ??
+            (node.fills.where((f) => f.type == DesignFillType.image).firstOrNull?.imageBase64);
+        if (b64 != null && b64.isNotEmpty) {
+          final prefix = b64.startsWith('data:') ? '' : 'data:image/png;base64,';
+          buffer.writeln(
+            '  <image x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" href="$prefix$b64"$transformStr$opacityStr$filterStr preserveAspectRatio="none" />',
+          );
+        } else {
+          buffer.writeln(
+            '  <rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" fill="$fillStr"$strokeStr$transformStr$opacityStr$filterStr />',
+          );
+        }
         break;
 
       case NodeType.roundedRectangle:

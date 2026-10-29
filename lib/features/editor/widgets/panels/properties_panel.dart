@@ -124,7 +124,7 @@ class PropertiesPanel extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Background',
+              'Background Color',
               style: TextStyle(
                 fontSize: 12,
                 color: isDark
@@ -158,7 +158,45 @@ class PropertiesPanel extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            const Color(0xFFFFFFFF),
+            const Color(0xFFF1F5F9),
+            const Color(0xFFE2E8F0),
+            const Color(0xFF0F172A),
+            const Color(0xFF1E293B),
+            const Color(0xFF000000),
+            const Color(0xFFFEF3C7),
+            const Color(0xFFEFF6FF),
+          ].map((c) {
+            final isSelected = page.backgroundColor.toARGB32() == c.toARGB32();
+            return GestureDetector(
+              onTap: () {
+                final updatedPage = page.copyWith(backgroundColor: c);
+                final pages = state.project.pages
+                    .map((p) => p.id == page.id ? updatedPage : p)
+                    .toList();
+                controller.updatePages(pages);
+              },
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: c,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSelected ? FormaColors.primaryBlue : Colors.black26,
+                    width: isSelected ? 2.5 : 1.0,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 14),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -208,50 +246,122 @@ class PropertiesPanel extends ConsumerWidget {
   }
 
   Widget _buildAlignmentBar(EditorController controller, bool isDark) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        NeuIconButton(
-          icon: Icons.align_horizontal_left_rounded,
-          size: 32,
-          iconSize: 16,
-          tooltip: 'Align Left',
-          onPressed: () => controller.alignSelection('left'),
+        _buildSectionTitle('ALIGN & DISTRIBUTE', isDark),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            NeuIconButton(
+              icon: Icons.align_horizontal_left_rounded,
+              size: 28,
+              iconSize: 15,
+              tooltip: 'Align Left',
+              onPressed: () => controller.alignSelection('left'),
+            ),
+            NeuIconButton(
+              icon: Icons.align_horizontal_center_rounded,
+              size: 28,
+              iconSize: 15,
+              tooltip: 'Align Center Horizontal',
+              onPressed: () => controller.alignSelection('centerHorizontal'),
+            ),
+            NeuIconButton(
+              icon: Icons.align_horizontal_right_rounded,
+              size: 28,
+              iconSize: 15,
+              tooltip: 'Align Right',
+              onPressed: () => controller.alignSelection('right'),
+            ),
+            NeuIconButton(
+              icon: Icons.align_vertical_top_rounded,
+              size: 28,
+              iconSize: 15,
+              tooltip: 'Align Top',
+              onPressed: () => controller.alignSelection('top'),
+            ),
+            NeuIconButton(
+              icon: Icons.align_vertical_center_rounded,
+              size: 28,
+              iconSize: 15,
+              tooltip: 'Align Center Vertical',
+              onPressed: () => controller.alignSelection('centerVertical'),
+            ),
+            NeuIconButton(
+              icon: Icons.align_vertical_bottom_rounded,
+              size: 28,
+              iconSize: 15,
+              tooltip: 'Align Bottom',
+              onPressed: () => controller.alignSelection('bottom'),
+            ),
+            NeuIconButton(
+              icon: Icons.horizontal_distribute_rounded,
+              size: 28,
+              iconSize: 15,
+              tooltip: 'Distribute Horizontal',
+              onPressed: () => controller.distributeSelection('horizontal'),
+            ),
+            NeuIconButton(
+              icon: Icons.vertical_distribute_rounded,
+              size: 28,
+              iconSize: 15,
+              tooltip: 'Distribute Vertical',
+              onPressed: () => controller.distributeSelection('vertical'),
+            ),
+          ],
         ),
-        NeuIconButton(
-          icon: Icons.align_horizontal_center_rounded,
-          size: 32,
-          iconSize: 16,
-          tooltip: 'Align Center Horizontal',
-          onPressed: () => controller.alignSelection('centerHorizontal'),
-        ),
-        NeuIconButton(
-          icon: Icons.align_horizontal_right_rounded,
-          size: 32,
-          iconSize: 16,
-          tooltip: 'Align Right',
-          onPressed: () => controller.alignSelection('right'),
-        ),
-        NeuIconButton(
-          icon: Icons.align_vertical_top_rounded,
-          size: 32,
-          iconSize: 16,
-          tooltip: 'Align Top',
-          onPressed: () => controller.alignSelection('top'),
-        ),
-        NeuIconButton(
-          icon: Icons.align_vertical_center_rounded,
-          size: 32,
-          iconSize: 16,
-          tooltip: 'Align Center Vertical',
-          onPressed: () => controller.alignSelection('centerVertical'),
-        ),
-        NeuIconButton(
-          icon: Icons.align_vertical_bottom_rounded,
-          size: 32,
-          iconSize: 16,
-          tooltip: 'Align Bottom',
-          onPressed: () => controller.alignSelection('bottom'),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'LAYER LEVEL',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+                color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+              ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                NeuIconButton(
+                  icon: Icons.vertical_align_top_rounded,
+                  size: 26,
+                  iconSize: 14,
+                  tooltip: 'Bring to Front',
+                  onPressed: controller.bringToFront,
+                ),
+                const SizedBox(width: 4),
+                NeuIconButton(
+                  icon: Icons.arrow_upward_rounded,
+                  size: 26,
+                  iconSize: 14,
+                  tooltip: 'Bring Forward',
+                  onPressed: controller.bringForward,
+                ),
+                const SizedBox(width: 4),
+                NeuIconButton(
+                  icon: Icons.arrow_downward_rounded,
+                  size: 26,
+                  iconSize: 14,
+                  tooltip: 'Send Backward',
+                  onPressed: controller.sendBackward,
+                ),
+                const SizedBox(width: 4),
+                NeuIconButton(
+                  icon: Icons.vertical_align_bottom_rounded,
+                  size: 26,
+                  iconSize: 14,
+                  tooltip: 'Send to Back',
+                  onPressed: controller.sendToBack,
+                ),
+              ],
+            ),
+          ],
         ),
       ],
     );
@@ -352,6 +462,94 @@ class PropertiesPanel extends ConsumerWidget {
             );
           },
         ),
+        if (node.type == NodeType.polygon) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      node.polygonSides == 3 ? 'TRIANGLE CORNERS' : 'POLYGON SIDES',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                      ),
+                    ),
+                    Text(
+                      '${node.polygonSides} corners',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: FormaColors.primaryBlue,
+                      ),
+                    ),
+                  ],
+                ),
+                Slider(
+                  value: node.polygonSides.toDouble().clamp(3.0, 12.0),
+                  min: 3,
+                  max: 12,
+                  divisions: 9,
+                  label: '${node.polygonSides}',
+                  activeColor: FormaColors.primaryBlue,
+                  onChanged: (val) {
+                    controller.updateNode(
+                      node.copyWith(polygonSides: val.toInt()),
+                    );
+                  },
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'CORNER FILLET RADIUS',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                      ),
+                    ),
+                    Text(
+                      '${node.cornerRadii.uniformValue.toInt()} px',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: FormaColors.primaryBlue,
+                      ),
+                    ),
+                  ],
+                ),
+                Slider(
+                  value: node.cornerRadii.uniformValue.clamp(0.0, 50.0),
+                  min: 0,
+                  max: 50,
+                  divisions: 50,
+                  label: '${node.cornerRadii.uniformValue.toInt()}',
+                  activeColor: FormaColors.primaryBlue,
+                  onChanged: (val) {
+                    controller.updateNode(
+                      node.copyWith(
+                        cornerRadii: CornerRadii.all(val),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -578,6 +776,37 @@ class PropertiesPanel extends ConsumerWidget {
     }
   }
 
+  Future<void> _pickAndReplaceImage(
+    BuildContext context,
+    DesignNode node,
+    EditorController controller,
+  ) async {
+    try {
+      final picked = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: ['png', 'jpg', 'jpeg', 'webp'],
+      );
+      if (picked != null) {
+        final bytes = await picked.readAsBytes();
+        final b64 = base64Encode(bytes);
+        final fillImg = node.fills.where((f) => f.type == DesignFillType.image).firstOrNull;
+        if (fillImg != null) {
+          final idx = node.fills.indexOf(fillImg);
+          final updated = List<DesignFill>.from(node.fills);
+          updated[idx] = fillImg.copyWith(imageBase64: b64, imagePath: b64);
+          controller.updateNode(node.copyWith(fills: updated, imagePath: b64));
+        } else {
+          controller.updateNode(
+            node.copyWith(
+              imagePath: b64,
+              fills: [DesignFill.image(imageBase64: b64)],
+            ),
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
   Widget _buildFillsSection(
     BuildContext context,
     DesignNode node,
@@ -745,34 +974,80 @@ class PropertiesPanel extends ConsumerWidget {
         }),
         if (node.type == NodeType.image || node.fills.any((f) => f.type == DesignFillType.image))
           Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 8),
-            child: SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.crop_rotate_rounded, size: 14),
-                label: const Text('Edit / Crop Image', style: TextStyle(fontSize: 11)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.only(top: 8, bottom: 8),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
                 ),
-                onPressed: () {
-                  final fillImg = node.fills.where((f) => f.type == DesignFillType.image).firstOrNull;
-                  final imgData = fillImg?.imageBase64 ?? fillImg?.imagePath ?? node.imagePath;
-                  ImageEditorDialog.show(
-                    context,
-                    initialImageBase64: imgData,
-                    onApply: (newB64) {
-                      if (fillImg != null) {
-                        final idx = node.fills.indexOf(fillImg);
-                        final updated = List<DesignFill>.from(node.fills);
-                        updated[idx] = fillImg.copyWith(imageBase64: newB64, imagePath: newB64);
-                        controller.updateNode(node.copyWith(fills: updated, imagePath: newB64));
-                      } else {
-                        controller.updateNode(node.copyWith(imagePath: newB64));
-                      }
-                    },
-                  );
-                },
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.image_outlined, size: 15, color: FormaColors.primaryBlue),
+                      const SizedBox(width: 6),
+                      Text(
+                        'IMAGE SETTINGS',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.6,
+                          color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.swap_horiz_rounded, size: 14),
+                          label: const Text('Replace', style: TextStyle(fontSize: 11)),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () => _pickAndReplaceImage(context, node, controller),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.crop_rotate_rounded, size: 14),
+                          label: const Text('Crop / Filter', style: TextStyle(fontSize: 11)),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () {
+                            final fillImg = node.fills.where((f) => f.type == DesignFillType.image).firstOrNull;
+                            final imgData = fillImg?.imageBase64 ?? fillImg?.imagePath ?? node.imagePath;
+                            ImageEditorDialog.show(
+                              context,
+                              initialImageBase64: imgData,
+                              onApply: (newB64) {
+                                if (fillImg != null) {
+                                  final idx = node.fills.indexOf(fillImg);
+                                  final updated = List<DesignFill>.from(node.fills);
+                                  updated[idx] = fillImg.copyWith(imageBase64: newB64, imagePath: newB64);
+                                  controller.updateNode(node.copyWith(fills: updated, imagePath: newB64));
+                                } else {
+                                  controller.updateNode(node.copyWith(imagePath: newB64));
+                                }
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
@@ -1070,57 +1345,177 @@ class PropertiesPanel extends ConsumerWidget {
           if (eff.type == DesignEffectType.sepia) label = 'SEPIA';
           if (eff.type == DesignEffectType.invertColors) label = 'INVERT COLORS';
 
+          final hasColor = eff.type == DesignEffectType.dropShadow ||
+              eff.type == DesignEffectType.innerShadow ||
+              eff.type == DesignEffectType.outerGlow ||
+              eff.type == DesignEffectType.innerGlow ||
+              eff.type == DesignEffectType.colorTint ||
+              eff.type == DesignEffectType.vignette;
+
+          final hasOffsets = eff.type == DesignEffectType.dropShadow ||
+              eff.type == DesignEffectType.innerShadow;
+
+          final hasSpread = eff.type == DesignEffectType.dropShadow ||
+              eff.type == DesignEffectType.outerGlow;
+
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.blur_on_rounded, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? FormaColors.darkTextMain
-                              : FormaColors.lightTextMain,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (hasColor) ...[
+                        GestureDetector(
+                          onTap: () {
+                            ColorPickerDialog.show(
+                              context,
+                              initialColor: eff.color,
+                              onColorChanged: (c) {
+                                final updated = List<DesignEffect>.from(node.effects);
+                                updated[i] = eff.copyWith(color: c);
+                                controller.updateNode(node.copyWith(effects: updated));
+                              },
+                            );
+                          },
+                          child: Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: eff.color,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.white, width: 1.5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: eff.color.withValues(alpha: 0.4),
+                                  blurRadius: 4,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ] else ...[
+                        const Icon(Icons.blur_on_rounded, size: 16),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? FormaColors.darkTextMain
+                                : FormaColors.lightTextMain,
+                          ),
                         ),
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 14),
-                      splashRadius: 12,
-                      onPressed: () {
-                        final updated = List<DesignEffect>.from(node.effects)
-                          ..removeAt(i);
-                        controller.updateNode(node.copyWith(effects: updated));
-                      },
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 14),
+                        splashRadius: 12,
+                        onPressed: () {
+                          final updated = List<DesignEffect>.from(node.effects)
+                            ..removeAt(i);
+                          controller.updateNode(node.copyWith(effects: updated));
+                        },
+                      ),
+                    ],
+                  ),
+                  if (hasColor) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Text(
+                          'DARKNESS',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                          ),
+                        ),
+                        Expanded(
+                          child: Slider(
+                            value: eff.color.a.clamp(0.0, 1.0),
+                            min: 0.0,
+                            max: 1.0,
+                            divisions: 20,
+                            activeColor: FormaColors.primaryBlue,
+                            onChanged: (val) {
+                              final updated = List<DesignEffect>.from(node.effects);
+                              updated[i] = eff.copyWith(
+                                color: eff.color.withValues(alpha: val),
+                              );
+                              controller.updateNode(node.copyWith(effects: updated));
+                            },
+                          ),
+                        ),
+                        Text(
+                          '${(eff.color.a * 100).toInt()}%',
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
                   ],
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, top: 4),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: FormaTouchNudgeField(
-                          label: 'BLUR',
-                          value: eff.blurRadius,
-                          min: 0,
-                          onChanged: (v) {
-                            final updated = List<DesignEffect>.from(node.effects);
-                            updated[i] = eff.copyWith(blurRadius: v);
-                            controller.updateNode(node.copyWith(effects: updated));
-                          },
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: FormaTouchNudgeField(
+                            label: 'BLUR',
+                            value: eff.blurRadius,
+                            min: 0,
+                            onChanged: (v) {
+                              final updated = List<DesignEffect>.from(node.effects);
+                              updated[i] = eff.copyWith(blurRadius: v);
+                              controller.updateNode(node.copyWith(effects: updated));
+                            },
+                          ),
                         ),
-                      ),
-                      if (eff.type == DesignEffectType.dropShadow ||
-                          eff.type == DesignEffectType.innerShadow) ...[
-                        const SizedBox(width: 8),
+                        if (hasSpread) ...[
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: FormaTouchNudgeField(
+                              label: 'SPREAD',
+                              value: eff.spreadRadius,
+                              min: 0,
+                              onChanged: (v) {
+                                final updated = List<DesignEffect>.from(node.effects);
+                                updated[i] = eff.copyWith(spreadRadius: v);
+                                controller.updateNode(node.copyWith(effects: updated));
+                              },
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (hasOffsets) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FormaTouchNudgeField(
+                            label: 'X',
+                            value: eff.offsetX,
+                            onChanged: (v) {
+                              final updated = List<DesignEffect>.from(node.effects);
+                              updated[i] = eff.copyWith(offsetX: v);
+                              controller.updateNode(node.copyWith(effects: updated));
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: FormaTouchNudgeField(
                             label: 'Y',
@@ -1133,10 +1528,10 @@ class PropertiesPanel extends ConsumerWidget {
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                ),
-              ],
+                    ),
+                  ],
+                ],
+              ),
             ),
           );
         }),

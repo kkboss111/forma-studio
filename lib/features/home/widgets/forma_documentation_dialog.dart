@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../app/theme/forma_colors.dart';
 import '../../../app/theme/neumorphic.dart';
@@ -16,13 +17,14 @@ class FormaDocumentationDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final size = MediaQuery.of(context).size;
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       child: Container(
-        width: 760,
-        height: 640,
+        width: math.min(size.width - 24, 760),
+        height: math.min(size.height * 0.88, 660),
         decoration: BoxDecoration(
           color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
           borderRadius: BorderRadius.circular(24),
@@ -41,35 +43,36 @@ class FormaDocumentationDialog extends StatelessWidget {
           children: [
             // Header Bar
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 20, 16),
+              padding: const EdgeInsets.fromLTRB(20, 16, 16, 14),
               child: Row(
                 children: [
-                  const FormaLogo(size: 32),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Forma Studio User Documentation & Guide',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: isDark
-                              ? FormaColors.darkTextMain
-                              : FormaColors.lightTextMain,
+                  const FormaLogo(size: 30),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Forma Studio User Documentation & Guide',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: isDark
+                                ? FormaColors.darkTextMain
+                                : FormaColors.lightTextMain,
+                          ),
                         ),
-                      ),
-                      const Text(
-                        'v0.1 (Beta Testing) • Mobile-First Vector Design Suite',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: FormaColors.primaryBlue,
+                        const Text(
+                          'v0.1 (Beta Testing) • Mobile-First Vector Design Suite',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: FormaColors.primaryBlue,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.close_rounded, size: 22),
                     tooltip: 'Close Guide',
@@ -84,8 +87,8 @@ class FormaDocumentationDialog extends StatelessWidget {
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 28,
-                  vertical: 20,
+                  horizontal: 20,
+                  vertical: 16,
                 ),
                 children: [
                   _buildSection(
@@ -100,47 +103,76 @@ class FormaDocumentationDialog extends StatelessWidget {
                         '• Double-tap on any Text object to directly edit its text in-place.\n'
                         '• Tap the Home icon in the top bar to return to your Recent Projects anytime.',
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   _buildSection(
-                    title: '2. Shapes, Frames & Layout Hierarchy',
+                    title: '2. Vector Pen Tool & Bézier Path Drafting',
+                    icon: Icons.polyline_rounded,
+                    isDark: isDark,
+                    content:
+                        '• Select the Pen tool (P) or double-tap any vector object to enter Vector Edit Mode.\n'
+                        '• Click or tap on canvas to place anchor points; drag while tapping to shape smooth tangent curve handles.\n'
+                        '• Tap the first anchor point or tap "Close Path" on the floating HUD to close the vector loop.\n'
+                        '• Toggle individual anchor points between smooth curves and sharp corners with "Smooth / Sharp".\n'
+                        '• Delete selected anchors with the delete icon or Delete key, and tap "Finish" to exit vector mode.',
+                  ),
+                  const SizedBox(height: 16),
+                  _buildSection(
+                    title: '3. Triangle, Polygons & Shift-Key Constraints',
+                    icon: Icons.change_history_rounded,
+                    isDark: isDark,
+                    content:
+                        '• Select Triangle from the tool dock or layer insert menu to draw 3-sided vector geometries.\n'
+                        '• In the Properties Panel, customize corner count (3 to 12 sides) and fillet corner radius (0 to 50 px).\n'
+                        '• Hold Shift while drawing or resizing any shape to enforce a perfect 1:1 aspect ratio (squares, circles, equilateral polygons).',
+                  ),
+                  const SizedBox(height: 16),
+                  _buildSection(
+                    title: '4. Shapes, Frames & Layer Stacking Order',
                     icon: Icons.layers_rounded,
                     isDark: isDark,
                     content:
                         '• Create Frames (F), Rectangles (R), Rounded Rects, Ellipses (O), Polygons, Stars, and Lines.\n'
-                        '• Use the Layers Panel on the left to reorder z-index, lock layers, hide/show, group (Ctrl+G), and rename.\n'
-                        '• Lock your screen layout to mobile, tablet, or desktop presets inside Settings > Advanced.',
+                        '• Use the upgraded Layers Panel to reorder layers by dragging and dropping them up or down.\n'
+                        '• Inspect layer level indicators (L1, L2, L3) and use Bring to Front, Bring Forward, Send Backward, and Send to Back buttons in the Properties Panel.',
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   _buildSection(
-                    title: '3. Fills, Gradients & 10+ Design Effects',
+                    title: '5. Fills, Gradients & Customizable Effects',
                     icon: Icons.palette_rounded,
                     isDark: isDark,
                     content:
                         '• Set Solid fills, or rich Linear, Radial, and Angular gradients with custom angle and stops.\n'
-                        '• Pick any gradient stop color using the integrated Color Wheel or swatches.\n'
-                        '• Apply gradients directly to object Strokes as well as fills.\n'
-                        '• Apply 12 distinct visual effects: Drop Shadow, Inner Shadow, Layer Blur, Background Frosted Blur, Outer Glow, Inner Glow, Color Tint, Vignette, Bloom, Grayscale, Sepia, and Invert Colors.',
+                        '• Customize Drop Shadows and Outer Glows with custom color pickers, darkness sliders, X & Y offsets, blur, and spread.\n'
+                        '• Apply layer filters: Grayscale, Sepia, Invert Colors, Vignette, Bloom, and Frosted Glass Blurs.',
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   _buildSection(
-                    title: '4. Motion Curves & Interactive Graph Editor',
-                    icon: Icons.animation_rounded,
+                    title: '6. Image Placement & Masking',
+                    icon: Icons.image_outlined,
                     isDark: isDark,
                     content:
-                        '• Open the Timeline panel from the top bar to play, pause, loop, and animate properties.\n'
-                        '• Unified position tracking animates objects smoothly across the screen.\n'
-                        '• Open the Graph Editor to inspect motion curves. Tap anywhere on the graph to add control points, and drag them to customize bezier transitions in real-time.',
+                        '• Insert standalone PNG/JPG/WebP images onto the canvas or mask them inside any shape.\n'
+                        '• Adjust image opacity, corner radii, and use the built-in Crop & Filter studio.\n'
+                        '• Quickly replace an image with a single tap using the Replace button.',
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   _buildSection(
-                    title: '5. Universal Import & Export (13 Formats)',
+                    title: '7. Universal Import & Multi-Format Export',
                     icon: Icons.import_export_rounded,
                     isDark: isDark,
                     content:
                         '• Import from industry formats including .fig, .sketch, .xd, .svg, .eps, .dxf, .json, and .forma.\n'
-                        '• Export at 1x, 2x, 3x, 4x, or custom custom resolutions and scales.\n'
-                        '• Share documents directly from the 3-dots project menu as .forma bundles or raster images.\n'
-                        '• 100% offline: All work stays on your device with local storage and full archive backup support.',
+                        '• Export full vector SVG with recursive hierarchy, embedded images, and drop shadow filters.\n'
+                        '• Export packaged Figma (.fig), Sketch (.sketch), and Adobe XD (.xd) bundles with embedded vector SVG.',
+                  ),
+                  const SizedBox(height: 16),
+                  _buildSection(
+                    title: '8. Themes & Security Passcodes',
+                    icon: Icons.security_rounded,
+                    isDark: isDark,
+                    content:
+                        '• Choose from Soft Neumorphic Light, Deep Slate Dark, Liquid Glass, Glassmorphism Frost, and Cyberpunk Neon.\n'
+                        '• Unlock premium aesthetic themes using their dedicated 4-digit security PINs in Settings > Appearance.',
                   ),
                 ],
               ),
@@ -149,14 +181,14 @@ class FormaDocumentationDialog extends StatelessWidget {
 
             // Footer
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     'Forma Studio • 100% Free & Open Vector Suite',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11.5,
                       color: isDark
                           ? FormaColors.darkTextMuted
                           : FormaColors.lightTextMuted,
@@ -165,8 +197,8 @@ class FormaDocumentationDialog extends StatelessWidget {
                   NeuButton(
                     isActive: true,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
+                      horizontal: 18,
+                      vertical: 8,
                     ),
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text(
@@ -174,7 +206,7 @@ class FormaDocumentationDialog extends StatelessWidget {
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                        fontSize: 12.5,
                       ),
                     ),
                   ),

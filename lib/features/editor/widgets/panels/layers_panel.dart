@@ -6,6 +6,7 @@ import '../../../../domain/models/node_model.dart';
 import '../../../../domain/models/node_types.dart';
 import '../../../../app/theme/forma_colors.dart';
 import '../../controllers/editor_controller.dart';
+import '../../controllers/editor_state.dart';
 
 class LayersPanel extends ConsumerWidget {
   final ProjectModel project;
@@ -83,21 +84,117 @@ class LayersPanel extends ConsumerWidget {
                       ? controller.groupSelectedNodes
                       : null,
                 ),
-                // Add Frame Button
-                IconButton(
+                // Add Layer / Node Popup Menu
+                PopupMenuButton<String>(
                   icon: const Icon(Icons.add_box_outlined, size: 15),
-                  tooltip: 'Add Frame',
-                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Insert Node / Layer',
                   padding: const EdgeInsets.all(4),
                   constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                   splashRadius: 14,
-                  onPressed: () {
-                    controller.createNode(
-                      type: NodeType.frame,
-                      rect: const Rect.fromLTWH(100, 100, 320, 240),
-                      name: 'Frame ${state.project.nodes.length + 1}',
-                    );
-                  },
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onSelected: (choice) => _insertNodeFromMenu(choice, controller, state),
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(
+                      value: 'rect',
+                      child: Row(
+                        children: [
+                          Icon(Icons.crop_square_rounded, size: 16),
+                          SizedBox(width: 8),
+                          Text('Rectangle', style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'roundedRect',
+                      child: Row(
+                        children: [
+                          Icon(Icons.rectangle_rounded, size: 16),
+                          SizedBox(width: 8),
+                          Text('Rounded Rect', style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'triangle',
+                      child: Row(
+                        children: [
+                          Icon(Icons.change_history_rounded, size: 16),
+                          SizedBox(width: 8),
+                          Text('Triangle (3 Corners)', style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'ellipse',
+                      child: Row(
+                        children: [
+                          Icon(Icons.circle_outlined, size: 16),
+                          SizedBox(width: 8),
+                          Text('Oval / Circle', style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'polygon',
+                      child: Row(
+                        children: [
+                          Icon(Icons.hexagon_outlined, size: 16),
+                          SizedBox(width: 8),
+                          Text('Polygon (Multi-corner)', style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'star',
+                      child: Row(
+                        children: [
+                          Icon(Icons.star_border_rounded, size: 16),
+                          SizedBox(width: 8),
+                          Text('Star', style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'text',
+                      child: Row(
+                        children: [
+                          Icon(Icons.title_rounded, size: 16),
+                          SizedBox(width: 8),
+                          Text('Text Node', style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'pen',
+                      child: Row(
+                        children: [
+                          Icon(Icons.polyline_rounded, size: 16),
+                          SizedBox(width: 8),
+                          Text('Vector Pen Path', style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'frame',
+                      child: Row(
+                        children: [
+                          Icon(Icons.crop_free_rounded, size: 16),
+                          SizedBox(width: 8),
+                          Text('Frame / Artboard', style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'group',
+                      child: Row(
+                        children: [
+                          Icon(Icons.folder_outlined, size: 16),
+                          SizedBox(width: 8),
+                          Text('Folder Group', style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 // Delete Selected Button
                 IconButton(
@@ -137,23 +234,35 @@ class LayersPanel extends ConsumerWidget {
                       ),
                     ),
                   )
-                : ListView.builder(
+                : ReorderableListView.builder(
                     padding: const EdgeInsets.symmetric(vertical: 4),
-                    // Reversed to show topmost on top (like Figma/Photoshop)
+                    buildDefaultDragHandles: true,
                     itemCount: page.rootNodeIds.length,
+                    onReorder: (oldIdx, newIdx) {
+                      final len = page.rootNodeIds.length;
+                      final realOld = len - 1 - oldIdx;
+                      final realNew = len - 1 - (newIdx > oldIdx ? newIdx - 1 : newIdx);
+                      controller.reorderRootNodes(realOld, realNew);
+                    },
                     itemBuilder: (context, index) {
                       final nodeId =
                           page.rootNodeIds[page.rootNodeIds.length - 1 - index];
                       final node = state.project.nodes[nodeId];
-                      if (node == null) return const SizedBox.shrink();
+                      if (node == null) return SizedBox.shrink(key: ValueKey(nodeId));
 
-                      return _buildLayerItem(
-                        context: context,
-                        node: node,
-                        depth: 0,
-                        state: state,
-                        controller: controller,
-                        isDark: isDark,
+                      final layerNumber = page.rootNodeIds.indexOf(nodeId) + 1;
+
+                      return Container(
+                        key: ValueKey(node.id),
+                        child: _buildLayerItem(
+                          context: context,
+                          node: node,
+                          depth: 0,
+                          layerNumber: layerNumber,
+                          state: state,
+                          controller: controller,
+                          isDark: isDark,
+                        ),
                       );
                     },
                   ),
@@ -163,10 +272,50 @@ class LayersPanel extends ConsumerWidget {
     );
   }
 
+  void _insertNodeFromMenu(String choice, EditorController controller, dynamic state) {
+    switch (choice) {
+      case 'rect':
+        controller.createNode(type: NodeType.rectangle, rect: const Rect.fromLTWH(100, 100, 180, 120));
+        break;
+      case 'roundedRect':
+        controller.createNode(type: NodeType.roundedRectangle, rect: const Rect.fromLTWH(100, 100, 180, 120));
+        break;
+      case 'triangle':
+        controller.createNode(type: NodeType.polygon, rect: const Rect.fromLTWH(100, 100, 160, 140), polygonSides: 3, name: 'Triangle ${state.project.nodes.length + 1}');
+        break;
+      case 'ellipse':
+        controller.createNode(type: NodeType.ellipse, rect: const Rect.fromLTWH(100, 100, 140, 140));
+        break;
+      case 'polygon':
+        controller.createNode(type: NodeType.polygon, rect: const Rect.fromLTWH(100, 100, 150, 150), polygonSides: 5);
+        break;
+      case 'star':
+        controller.createNode(type: NodeType.star, rect: const Rect.fromLTWH(100, 100, 150, 150));
+        break;
+      case 'text':
+        controller.createNode(type: NodeType.text, rect: const Rect.fromLTWH(100, 100, 200, 40));
+        break;
+      case 'pen':
+        controller.setTool(EditorTool.vectorPen);
+        break;
+      case 'frame':
+        controller.createNode(type: NodeType.frame, rect: const Rect.fromLTWH(100, 100, 360, 260), name: 'Frame ${state.project.nodes.length + 1}');
+        break;
+      case 'group':
+        if (state.selectedNodeIds.length > 1) {
+          controller.groupSelectedNodes();
+        } else {
+          controller.createNode(type: NodeType.group, rect: const Rect.fromLTWH(100, 100, 200, 200), name: 'Group ${state.project.nodes.length + 1}');
+        }
+        break;
+    }
+  }
+
   Widget _buildLayerItem({
     required BuildContext context,
     required DesignNode node,
     required int depth,
+    int? layerNumber,
     required dynamic state,
     required EditorController controller,
     required bool isDark,
@@ -188,6 +337,24 @@ class LayersPanel extends ConsumerWidget {
                 : Colors.transparent,
             child: Row(
               children: [
+                if (layerNumber != null) ...[
+                  Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'L$layerNumber',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                      ),
+                    ),
+                  ),
+                ],
                 Icon(
                   _getNodeIcon(node.type),
                   size: 15,

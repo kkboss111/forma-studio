@@ -24,13 +24,17 @@ class FormaApp extends ConsumerWidget {
         mode = ThemeMode.dark;
         break;
       case FormaThemeMode.liquidGlass:
-        // Liquid Glass uses custom translucent glass styling on top of neutral canvas
+      case FormaThemeMode.glassmorphism:
         mode = ThemeMode.light;
+        break;
+      case FormaThemeMode.cyberpunk:
+        mode = ThemeMode.dark;
         break;
     }
 
     final isSystemDark = View.of(context).platformDispatcher.platformBrightness == Brightness.dark;
     final isDark = settings.themeMode == FormaThemeMode.dark ||
+        settings.themeMode == FormaThemeMode.cyberpunk ||
         (settings.themeMode == FormaThemeMode.system && isSystemDark);
 
     return MaterialApp(
