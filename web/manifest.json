@@ -1,6 +1,6 @@
 {
-    "name": "forma_studio",
-    "short_name": "forma_studio",
+    "name": "Forma Studio",
+    "short_name": "Forma Studio",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

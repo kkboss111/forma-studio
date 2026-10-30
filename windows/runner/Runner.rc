@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.formastudio" "\0"
-            VALUE "FileDescription", "forma_studio" "\0"
+            VALUE "FileDescription", "Forma Studio" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "forma_studio" "\0"
+            VALUE "InternalName", "Forma Studio" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.formastudio. All rights reserved." "\0"
             VALUE "OriginalFilename", "forma_studio.exe" "\0"
-            VALUE "ProductName", "forma_studio" "\0"
+            VALUE "ProductName", "Forma Studio" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
