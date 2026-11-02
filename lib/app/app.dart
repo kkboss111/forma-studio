@@ -28,6 +28,7 @@ class FormaApp extends ConsumerWidget {
         break;
       case FormaThemeMode.liquidGlass:
         mode = ThemeMode.light;
+        activeLightTheme = FormaTheme.liquidGlass();
         break;
       case FormaThemeMode.glassmorphism:
         mode = ThemeMode.dark;
@@ -41,7 +42,7 @@ class FormaApp extends ConsumerWidget {
         (settings.themeMode == FormaThemeMode.system && isSystemDark);
 
     return MaterialApp(
-      title: 'Forma Studio v0.1 (Beta Testing)',
+      title: 'Forma Studio v0.3 (Beta Testing)',
       debugShowCheckedModeBanner: false,
       theme: activeLightTheme,
       darkTheme: activeDarkTheme,

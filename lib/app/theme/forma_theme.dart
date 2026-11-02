@@ -142,6 +142,48 @@ class FormaTheme {
     );
   }
 
+  /// Liquid Glass Theme (Aquatic modern glass with clean, low-shadow translucent surfaces)
+  static ThemeData liquidGlass() {
+    final baseTextTheme = GoogleFonts.plusJakartaSansTextTheme();
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: const Color(0xFFF0F9FF),
+      colorScheme: const ColorScheme(
+        brightness: Brightness.light,
+        primary: Color(0xFF0284C7), // Light cyan/sky blue
+        onPrimary: Colors.white,
+        secondary: Color(0xFF0EA5E9),
+        onSecondary: Colors.white,
+        surface: Color(0xD9FFFFFF), // 85% white frost
+        onSurface: Color(0xFF0F172A),
+        error: Color(0xFFEF4444),
+        onError: Colors.white,
+      ),
+      dividerColor: const Color(0x330284C7),
+      cardColor: const Color(0xC0FFFFFF),
+      textTheme: baseTextTheme.copyWith(
+        headlineMedium: baseTextTheme.headlineMedium?.copyWith(
+          color: const Color(0xFF0F172A),
+          fontWeight: FontWeight.w700,
+        ),
+        titleLarge: baseTextTheme.titleLarge?.copyWith(
+          color: const Color(0xFF0F172A),
+          fontWeight: FontWeight.w700,
+        ),
+        bodyLarge: baseTextTheme.bodyLarge?.copyWith(
+          color: const Color(0xFF0F172A),
+          fontWeight: FontWeight.w500,
+        ),
+        bodyMedium: baseTextTheme.bodyMedium?.copyWith(
+          color: const Color(0xFF334155),
+          fontWeight: FontWeight.w400,
+        ),
+      ),
+    );
+  }
+
   /// Showcase Glassmorphism Theme (Dark Cosmic Glass with Glowing Orbs)
   /// Grounded in modern CSS glassmorphism specification (backdrop-filter: blur, alpha surfaces, luminous orbs)
   static ThemeData glassmorphism() {

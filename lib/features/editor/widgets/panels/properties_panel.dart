@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:math' as math;
+import '../../../../domain/services/custom_font_service.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../domain/models/project_model.dart';
@@ -97,8 +98,11 @@ class PropertiesPanel extends ConsumerWidget {
             _buildEffectsSection(context, primaryNode, controller, isDark),
             const Divider(height: 24),
 
-            // Vector Path Section (Explicit Edit button so double-clicking doesn't accidentally trigger)
-            _buildVectorPathSection(context, primaryNode, controller, isDark),
+            // Vector Path / Pencil Draw Section
+            if (primaryNode.type == NodeType.vectorPath ||
+                primaryNode.type == NodeType.freehandPath) ...[
+              _buildVectorPathSection(context, primaryNode, controller, isDark),
+            ],
           ],
         ],
       ),
@@ -339,6 +343,49 @@ class PropertiesPanel extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
+              'MATCH SIZE',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+                color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+              ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                NeuIconButton(
+                  icon: Icons.sync_alt_rounded,
+                  size: 26,
+                  iconSize: 14,
+                  tooltip: 'Match Width',
+                  onPressed: () => controller.matchSelectionDimensions('sameWidth'),
+                ),
+                const SizedBox(width: 4),
+                NeuIconButton(
+                  icon: Icons.height_rounded,
+                  size: 26,
+                  iconSize: 14,
+                  tooltip: 'Match Height',
+                  onPressed: () => controller.matchSelectionDimensions('sameHeight'),
+                ),
+                const SizedBox(width: 4),
+                NeuIconButton(
+                  icon: Icons.aspect_ratio_rounded,
+                  size: 26,
+                  iconSize: 14,
+                  tooltip: 'Make Square Aspect',
+                  onPressed: () => controller.matchSelectionDimensions('makeSquare'),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
               'LAYER LEVEL',
               style: TextStyle(
                 fontSize: 10,
@@ -399,75 +446,123 @@ class PropertiesPanel extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionTitle('GEOMETRY', isDark),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: FormaTouchNudgeField(
-                label: 'X',
-                value: node.x,
-                onChanged: (val) => controller.updateNode(node.copyWith(x: val)),
+        const SizedBox(height: 12),
+        // Row 1: Position X and Y
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('POSITION (CANVAS COORD)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted)),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: FormaTouchNudgeField(
+                      label: 'X',
+                      value: node.x,
+                      onChanged: (val) => controller.updateNode(node.copyWith(x: val)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FormaTouchNudgeField(
+                      label: 'Y',
+                      value: node.y,
+                      onChanged: (val) => controller.updateNode(node.copyWith(y: val)),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: FormaTouchNudgeField(
-                label: 'Y',
-                value: node.y,
-                onChanged: (val) => controller.updateNode(node.copyWith(y: val)),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: FormaTouchNudgeField(
-                label: 'W',
-                value: node.width,
-                min: 1,
-                onChanged: (val) => controller.updateNode(
-                  node.copyWith(width: math.max(1, val)),
-                ),
+        // Row 2: Dimensions Width and Height
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('SIZE (BOUNDING BOX)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted)),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: FormaTouchNudgeField(
+                      label: 'W',
+                      value: node.width,
+                      min: 1,
+                      onChanged: (val) => controller.updateNode(
+                        node.copyWith(width: math.max(1, val)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FormaTouchNudgeField(
+                      label: 'H',
+                      value: node.height,
+                      min: 1,
+                      onChanged: (val) => controller.updateNode(
+                        node.copyWith(height: math.max(1, val)),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: FormaTouchNudgeField(
-                label: 'H',
-                value: node.height,
-                min: 1,
-                onChanged: (val) => controller.updateNode(
-                  node.copyWith(height: math.max(1, val)),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: FormaTouchNudgeField(
-                label: 'R°',
-                value: node.rotation,
-                onChanged: (val) =>
-                    controller.updateNode(node.copyWith(rotation: val)),
+        // Row 3: Rotation and Corner Radius
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('ROTATION & RADIUS', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted)),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: FormaTouchNudgeField(
+                      label: 'R°',
+                      value: node.rotation,
+                      onChanged: (val) =>
+                          controller.updateNode(node.copyWith(rotation: val)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FormaTouchNudgeField(
+                      label: 'Rad',
+                      value: node.cornerRadii.uniformValue,
+                      min: 0,
+                      onChanged: (val) => controller.updateNode(
+                        node.copyWith(cornerRadii: CornerRadii.all(val)),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: FormaTouchNudgeField(
-                label: 'Rad',
-                value: node.cornerRadii.uniformValue,
-                min: 0,
-                onChanged: (val) => controller.updateNode(
-                  node.copyWith(cornerRadii: CornerRadii.all(val)),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         // Touch-first Opacity slider
@@ -2306,9 +2401,46 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
                     ),
                   ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 20),
-                  onPressed: () => Navigator.pop(context),
+                Row(
+                  children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: FormaColors.primaryBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.file_upload_outlined, size: 16),
+                      label: const Text('Import Font File (.ttf/.otf)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () async {
+                        try {
+                          final result = await FilePicker.pickFile(
+                            type: FileType.custom,
+                            allowedExtensions: ['ttf', 'otf'],
+                          );
+                          if (result != null) {
+                            final bytes = await result.readAsBytes();
+                            final fontName = result.name.replaceAll('.ttf', '').replaceAll('.otf', '').trim();
+                            final loaded = await CustomFontService.loadFontFromBytes(
+                              familyName: fontName,
+                              fontBytes: bytes,
+                            );
+                            if (loaded && mounted) {
+                              widget.onFontSelected(fontName);
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                              }
+                            }
+                          }
+                        } catch (_) {}
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
               ],
             ),

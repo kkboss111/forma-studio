@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math' as math;
+import '../widgets/dialogs/icon_editor_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -486,6 +487,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                     isGlass,
                   ),
 
+                  // --- PAGES & CANVASES TAB BAR ---
+                  _buildPagesTabBar(context, state, controller, isDark, isGlass),
+
                   // --- MAIN EDITOR WORKSPACE ---
                   Expanded(
                     child: Stack(
@@ -723,6 +727,21 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
             ),
             const SizedBox(width: 6),
 
+            // Icon Studio (Limited Grid Arena)
+            NeuIconButton(
+              icon: Icons.star_border_purple500_rounded,
+              size: 34,
+              iconSize: 16,
+              iconColor: const Color(0xFF8B5CF6),
+              tooltip: 'Open Icon Studio Arena',
+              onPressed: () => IconEditorDialog.show(
+                context,
+                controller: controller,
+                isDark: isDark,
+              ),
+            ),
+            const SizedBox(width: 6),
+
             // Import SVG
             NeuIconButton(
               icon: Icons.file_open_outlined,
@@ -843,6 +862,91 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPagesTabBar(
+    BuildContext context,
+    dynamic state,
+    EditorController controller,
+    bool isDark,
+    bool isGlass,
+  ) {
+    final pages = state.project.pages;
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: isGlass
+            ? Colors.white.withValues(alpha: 0.15)
+            : (isDark ? const Color(0xFF131822) : const Color(0xFFE2E8F0)),
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.tab_rounded, size: 14, color: FormaColors.primaryBlue),
+          const SizedBox(width: 6),
+          Expanded(
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final page in pages) ...[
+                  InkWell(
+                    onTap: () => controller.switchPage(page.id),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: page.id == state.activePageId
+                            ? (isDark ? FormaColors.primaryBlue.withValues(alpha: 0.3) : Colors.white)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                        border: page.id == state.activePageId
+                            ? Border.all(color: FormaColors.primaryBlue, width: 1.0)
+                            : null,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            page.name,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: page.id == state.activePageId ? FontWeight.bold : FontWeight.w500,
+                              color: isDark ? Colors.white : FormaColors.lightTextMain,
+                            ),
+                          ),
+                          if (pages.length > 1 && page.id == state.activePageId) ...[
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: () => controller.deletePage(page.id),
+                              child: const Icon(Icons.close_rounded, size: 12, color: Colors.grey),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_rounded, size: 16),
+            tooltip: 'Add Canvas / Page Tab',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+            onPressed: () {
+              controller.addPage('Canvas ${pages.length + 1}');
+            },
+          ),
+        ],
       ),
     );
   }

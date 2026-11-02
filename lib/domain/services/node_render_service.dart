@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
+import 'custom_font_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -560,6 +561,22 @@ class NodeRenderService {
     double wordSpacing = 0.0,
     required double height,
   }) {
+    final cleanFont = fontFamily.trim();
+    if (CustomFontService.isImported(cleanFont)) {
+      return TextStyle(
+        fontFamily: cleanFont,
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        fontStyle: fontStyle,
+        decoration: decoration,
+        color: foreground == null ? (color ?? const Color(0xFF2B3445)) : null,
+        foreground: foreground,
+        shadows: shadows,
+        letterSpacing: letterSpacing,
+        wordSpacing: wordSpacing,
+        height: height,
+      );
+    }
     try {
       if (foreground != null) {
         return GoogleFonts.getFont(

@@ -366,7 +366,7 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
       return;
     }
 
-    // Vector Pen Tool (drafting or adding anchors with interactive curve bending)
+    // Vector Pen Tool (drafting or adding anchors with automatic interactive curve bending)
     if (state.activeTool == EditorTool.vectorPen) {
       if (!state.isVectorEditing) {
         controller.startNewVectorDraft(_dragStartDoc!);
@@ -406,6 +406,7 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
 
           final localPt = docPt - nodeOffset;
           controller.addVectorAnchor(localPt);
+          // Set to new anchor with active handle drag mode so dragging curves the line immediately
           _activeAnchorIdx = node.vectorData!.anchors.length;
           _activeHandleTarget = VectorHandleTarget.handleOut;
           controller.setDragMode(DragMode.movingHandle);
@@ -734,6 +735,16 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
     EditorState state,
     EditorController controller,
   ) {
+    // Finalize vector handle bending when pointer is released
+    if (state.dragMode == DragMode.movingHandle &&
+        _activeAnchorIdx != null &&
+        state.editingVectorNodeId != null) {
+      final node = state.project.nodes[state.editingVectorNodeId!];
+      if (node != null && node.vectorData != null) {
+        controller.updateNode(node);
+      }
+    }
+
     if (_dragStartDoc != null &&
         state.dragMode == DragMode.drawingNode &&
         state.activeTool != EditorTool.vectorPen) {

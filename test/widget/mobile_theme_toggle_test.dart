@@ -120,8 +120,12 @@ void main() {
       final editorThemeToggle = find.byTooltip('Switch to Dark Mode');
       expect(editorThemeToggle, findsOneWidget);
 
+      // Scroll top bar to make toggle visible if horizontal overflow in 740px test
+      await tester.ensureVisible(editorThemeToggle);
+      await tester.pumpAndSettle();
+
       // Tap theme toggle in editor
-      await tester.tap(editorThemeToggle);
+      await tester.tap(editorThemeToggle, warnIfMissed: false);
       await tester.pumpAndSettle();
 
       // State is now dark

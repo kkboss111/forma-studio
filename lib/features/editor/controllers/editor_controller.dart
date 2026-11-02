@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import '../../../domain/services/advanced_alignment_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -434,22 +435,25 @@ class EditorController extends StateNotifier<EditorState> {
     _repository.scheduleAutosave(current);
   }
 
-  void groupSelectedNodes() {
-    if (state.selectedNodeIds.length < 2) return;
-
+  void groupSelectedNodes({String? folderName}) {
     final selected = state.selectedNodeIds
         .map((id) => state.project.nodes[id])
         .whereType<DesignNode>()
         .toList();
 
-    final bounds = GeometryUtils.getCollectiveBoundingBox(selected);
-    if (bounds == null) return;
+    final groupId = 'folder-${_uuid.v4().substring(0, 8)}';
+    final name = folderName ?? (selected.isEmpty ? 'New Folder' : 'Folder ${state.project.nodes.length + 1}');
 
-    final groupId = 'group-${_uuid.v4().substring(0, 8)}';
+    Rect bounds = const Rect.fromLTWH(100, 100, 200, 200);
+    if (selected.isNotEmpty) {
+      final calcBounds = GeometryUtils.getCollectiveBoundingBox(selected);
+      if (calcBounds != null) bounds = calcBounds;
+    }
+
     final groupNode = DesignNode(
       id: groupId,
       type: NodeType.group,
-      name: 'Group ${state.project.nodes.length + 1}',
+      name: name,
       x: bounds.left,
       y: bounds.top,
       width: bounds.width,
@@ -457,7 +461,7 @@ class EditorController extends StateNotifier<EditorState> {
       childrenIds: selected.map((n) => n.id).toList(),
     );
 
-    // Update children parentId and local offset
+    // Update children parentId
     final updatedNodes = Map<String, DesignNode>.from(state.project.nodes);
     updatedNodes[groupId] = groupNode;
 
@@ -527,6 +531,38 @@ class EditorController extends StateNotifier<EditorState> {
     );
     state = state.copyWith(project: updatedProj, selectedNodeIds: newSelected);
     _repository.scheduleAutosave(updatedProj);
+  }
+
+  void moveNodeIntoFolder({required String nodeId, required String folderId}) {
+    final folder = state.project.nodes[folderId];
+    final node = state.project.nodes[nodeId];
+    if (folder == null || node == null || folder.id == node.id) return;
+
+    final updatedChildren = List<String>.from(folder.childrenIds);
+    if (!updatedChildren.contains(nodeId)) {
+      updatedChildren.add(nodeId);
+    }
+
+    final updatedNodes = Map<String, DesignNode>.from(state.project.nodes);
+    updatedNodes[folderId] = folder.copyWith(childrenIds: updatedChildren);
+    updatedNodes[nodeId] = node.copyWith(parentId: folderId);
+
+    final page = state.project.getPage(state.activePageId);
+    if (page != null) {
+      final updatedRoots = List<String>.from(page.rootNodeIds)..remove(nodeId);
+      final updatedPages = state.project.pages.map((p) {
+        if (p.id == page.id) return p.copyWith(rootNodeIds: updatedRoots);
+        return p;
+      }).toList();
+      state = state.copyWith(
+        project: state.project.copyWith(nodes: updatedNodes, pages: updatedPages),
+      );
+    } else {
+      state = state.copyWith(
+        project: state.project.copyWith(nodes: updatedNodes),
+      );
+    }
+    _repository.scheduleAutosave(state.project);
   }
 
   // --- Layer Stacking Order ---
@@ -633,7 +669,6 @@ class EditorController extends StateNotifier<EditorState> {
         final parent = state.project.nodes[node.parentId]!;
         bounds = Rect.fromLTWH(0, 0, parent.width, parent.height);
       } else {
-        // Page canvas bounds
         bounds = const Rect.fromLTWH(0, 0, 1200, 800);
       }
     } else {
@@ -642,37 +677,41 @@ class EditorController extends StateNotifier<EditorState> {
     if (bounds == null) return;
 
     final orig = <String, Offset>{};
-    final next = <String, Offset>{};
-
     for (final node in selected) {
       orig[node.id] = Offset(node.x, node.y);
-      double nx = node.x;
-      double ny = node.y;
-
-      switch (alignment) {
-        case 'left':
-          nx = bounds.left;
-          break;
-        case 'centerHorizontal':
-          nx = bounds.center.dx - node.width / 2;
-          break;
-        case 'right':
-          nx = bounds.right - node.width;
-          break;
-        case 'top':
-          ny = bounds.top;
-          break;
-        case 'centerVertical':
-          ny = bounds.center.dy - node.height / 2;
-          break;
-        case 'bottom':
-          ny = bounds.bottom - node.height;
-          break;
-      }
-      next[node.id] = Offset(nx, ny);
     }
 
+    final next = AdvancedAlignmentEngine.calculateAlignedOffsets(
+      selectedNodes: selected,
+      referenceBounds: bounds,
+      alignmentType: alignment,
+    );
+
     moveNodes(orig, next);
+  }
+
+  void matchSelectionDimensions(String matchType) {
+    if (state.selectedNodeIds.isEmpty) return;
+    final selected = state.selectedNodeIds
+        .map((id) => state.project.nodes[id])
+        .whereType<DesignNode>()
+        .toList();
+    if (selected.isEmpty) return;
+
+    final targetSizes = AdvancedAlignmentEngine.calculateDimensionMatches(
+      selectedNodes: selected,
+      matchType: matchType,
+    );
+
+    for (final entry in targetSizes.entries) {
+      final node = state.project.nodes[entry.key];
+      if (node != null) {
+        updateNode(node.copyWith(
+          width: entry.value.width,
+          height: entry.value.height,
+        ));
+      }
+    }
   }
 
   void distributeSelection(String axis) {
@@ -987,20 +1026,45 @@ class EditorController extends StateNotifier<EditorState> {
   void paste() async {
     List<DesignNode> toPaste = List<DesignNode>.from(globalClipboardNodes);
 
-    if (toPaste.isEmpty) {
-      try {
-        final clipData = await Clipboard.getData(Clipboard.kTextPlain);
-        if (clipData?.text != null && clipData!.text!.contains('forma_type')) {
-          final decoded = jsonDecode(clipData.text!) as Map<String, dynamic>;
+    try {
+      final clipData = await Clipboard.getData(Clipboard.kTextPlain);
+      final rawText = clipData?.text?.trim();
+      if (rawText != null && rawText.isNotEmpty) {
+        if (rawText.contains('forma_type')) {
+          final decoded = jsonDecode(rawText) as Map<String, dynamic>;
           if (decoded['forma_type'] == 'nodes') {
             final rawList = decoded['data'] as List;
-            toPaste = rawList
+            final fromSys = rawList
                 .map((j) => DesignNode.fromJson(j as Map<String, dynamic>))
                 .toList();
+            if (fromSys.isNotEmpty) {
+              toPaste = fromSys;
+            }
           }
+        } else if (!rawText.startsWith('{') && !rawText.startsWith('[')) {
+          // Plain text pasted from outside: create a new TextNode on canvas!
+          final textNodeId = 'text_${DateTime.now().millisecondsSinceEpoch}';
+          final tData = TextNodeData(text: rawText, fontSize: 16.0);
+          final measured = NodeRenderService.measureText(tData);
+          final textNode = DesignNode(
+            id: textNodeId,
+            name: 'Pasted Text',
+            type: NodeType.text,
+            x: 200.0,
+            y: 200.0,
+            width: math.max(120.0, measured.width + 12.0),
+            height: math.max(36.0, measured.height + 8.0),
+            textData: tData,
+            fills: const [DesignFill.solid(Color(0xFF0F172A))],
+          );
+          final cmd = AddNodeCommand(pageId: state.activePageId, node: textNode);
+          final updated = _history.executeCommand(cmd, state.project);
+          state = state.copyWith(project: updated, selectedNodeIds: {textNodeId});
+          _repository.scheduleAutosave(updated);
+          return;
         }
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
 
     if (toPaste.isEmpty) return;
     final newSelected = <String>{};

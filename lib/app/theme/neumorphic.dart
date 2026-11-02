@@ -68,10 +68,10 @@ class NeuBoxDecoration {
       );
     }
 
-    // Default: Raised
-    final offsetDark = Offset(5 * intensity, 5 * intensity);
-    final offsetLight = Offset(-5 * intensity, -5 * intensity);
-    final blur = 12.0 * intensity;
+    // Default: Raised (Reduced shadows according to UI design rules)
+    final offsetDark = Offset(2.5 * intensity, 2.5 * intensity);
+    final offsetLight = Offset(-2.5 * intensity, -2.5 * intensity);
+    final blur = 6.0 * intensity;
 
     return BoxDecoration(
       color: surfaceColor,
@@ -83,10 +83,13 @@ class NeuBoxDecoration {
                   color: FormaColors.primaryBlue.withValues(alpha: 0.6),
                   width: 1.5,
                 )
-              : null),
+              : Border.all(
+                  color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+                  width: 1.0,
+                )),
       boxShadow: [
-        BoxShadow(color: shadowDark, offset: offsetDark, blurRadius: blur),
-        BoxShadow(color: shadowLight, offset: offsetLight, blurRadius: blur),
+        BoxShadow(color: shadowDark.withValues(alpha: isDark ? 0.35 : 0.25), offset: offsetDark, blurRadius: blur),
+        BoxShadow(color: shadowLight.withValues(alpha: isDark ? 0.15 : 0.4), offset: offsetLight, blurRadius: blur),
       ],
     );
   }

@@ -88,10 +88,10 @@ class _LayersPanelState extends ConsumerState<LayersPanel> {
                   constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
                   splashRadius: 12,
                   onPressed: () {
-                    controller.createNode(
-                      type: NodeType.group,
-                      rect: const Rect.fromLTWH(100, 100, 240, 240),
-                      name: 'New Folder ${state.project.nodes.length + 1}',
+                    controller.groupSelectedNodes(
+                      folderName: state.selectedNodeIds.isNotEmpty
+                          ? 'Folder (${state.selectedNodeIds.length} items)'
+                          : 'New Folder',
                     );
                   },
                 ),
@@ -342,18 +342,32 @@ class _LayersPanelState extends ConsumerState<LayersPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        InkWell(
-          onTap: () => controller.selectNode(node.id),
-          child: Container(
-            height: 36,
-            padding: EdgeInsets.only(left: 8.0 + (depth * 14.0), right: 6.0),
-            color: isSelected
-                ? FormaColors.primaryBlue.withValues(
-                    alpha: isDark ? 0.25 : 0.12,
-                  )
-                : Colors.transparent,
-            child: Row(
-              children: [
+        // DragTarget to allow dropping any layer directly into this folder
+        DragTarget<String>(
+          onWillAcceptWithDetails: (details) => isFolder && details.data != node.id,
+          onAcceptWithDetails: (details) {
+            controller.moveNodeIntoFolder(nodeId: details.data, folderId: node.id);
+          },
+          builder: (context, candidateData, rejectedData) {
+            return InkWell(
+              onTap: () => controller.selectNode(node.id),
+              child: Container(
+                height: 36,
+                padding: EdgeInsets.only(left: 8.0 + (depth * 14.0), right: 6.0),
+                decoration: BoxDecoration(
+                  color: candidateData.isNotEmpty
+                      ? FormaColors.primaryBlue.withValues(alpha: 0.2)
+                      : (isSelected
+                          ? FormaColors.primaryBlue.withValues(
+                              alpha: isDark ? 0.25 : 0.12,
+                            )
+                          : Colors.transparent),
+                  border: candidateData.isNotEmpty
+                      ? Border.all(color: FormaColors.primaryBlue, width: 1.5)
+                      : null,
+                ),
+                child: Row(
+                  children: [
                 if (isFolder) ...[
                   InkWell(
                     onTap: () {
@@ -476,21 +490,35 @@ class _LayersPanelState extends ConsumerState<LayersPanel> {
                 ),
                 const SizedBox(width: 2),
                 if (reorderIndex != null)
-                  ReorderableDragStartListener(
-                    index: reorderIndex,
-                    child: const Padding(
-                      padding: EdgeInsets.all(4.0),
-                      child: Icon(
-                        Icons.drag_indicator_rounded,
-                        size: 15,
-                        color: Colors.grey,
+                  Draggable<String>(
+                    data: node.id,
+                    feedback: Material(
+                      elevation: 4,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        color: isDark ? const Color(0xFF1E2430) : Colors.white,
+                        child: Text(node.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    child: ReorderableDragStartListener(
+                      index: reorderIndex,
+                      child: const Padding(
+                        padding: EdgeInsets.all(4.0),
+                        child: Icon(
+                          Icons.drag_indicator_rounded,
+                          size: 15,
+                          color: Colors.grey,
+                        ),
                       ),
                     ),
                   ),
               ],
             ),
           ),
-        ),
+        );
+      },
+    ),
         // Render child layers recursively if not collapsed (Windows style)
         if (!isCollapsed) ...[
           for (final childId in node.childrenIds) ...[
