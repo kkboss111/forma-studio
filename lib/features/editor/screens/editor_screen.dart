@@ -1311,14 +1311,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
         size: 36,
         iconSize: 17,
       ),
-      _toolButton(
-        EditorTool.text,
-        Icons.title_rounded,
-        'Text',
-        state,
-        controller,
+      NeuIconButton(
+        icon: Icons.title_rounded,
         size: 36,
         iconSize: 17,
+        isActive: state.activeTool == EditorTool.text,
+        tooltip: 'Text & Typography',
+        onPressed: () => _showMobileTextMenu(context, controller),
       ),
       NeuIconButton(
         icon: Icons.image_outlined,
@@ -1608,6 +1607,174 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMobileTextMenu(BuildContext context, EditorController controller) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border.all(
+              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'ADD TYPOGRAPHY & TEXT',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.8,
+                      color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _textOptionCard(
+                ctx,
+                controller,
+                title: 'Add a Heading',
+                subtitle: 'Large, bold title for sections & headers (32px)',
+                fontSize: 32.0,
+                fontWeight: 700,
+                icon: Icons.title_rounded,
+              ),
+              const SizedBox(height: 8),
+              _textOptionCard(
+                ctx,
+                controller,
+                title: 'Add a Subheading',
+                subtitle: 'Medium, emphasized title for cards & groups (22px)',
+                fontSize: 22.0,
+                fontWeight: 600,
+                icon: Icons.text_fields_rounded,
+              ),
+              const SizedBox(height: 8),
+              _textOptionCard(
+                ctx,
+                controller,
+                title: 'Add Body Text',
+                subtitle: 'Standard paragraph font for general copy (16px)',
+                fontSize: 16.0,
+                fontWeight: 400,
+                icon: Icons.short_text_rounded,
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  icon: const Icon(Icons.touch_app_rounded, size: 18),
+                  label: const Text('Tap Canvas to Draw Custom Box'),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    controller.setTool(EditorTool.text);
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _textOptionCard(
+    BuildContext ctx,
+    EditorController controller, {
+    required String title,
+    required String subtitle,
+    required double fontSize,
+    required int fontWeight,
+    required IconData icon,
+  }) {
+    return InkWell(
+      onTap: () {
+        Navigator.pop(ctx);
+        final id = controller.insertTextAtViewportCenter(
+          initialText: title.replaceFirst('Add a ', '').replaceFirst('Add ', ''),
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final n = controller.currentState.project.nodes[id];
+          if (n != null && mounted) {
+            CanvasViewport.showInPlaceTextEditor(context, n, controller);
+          }
+        });
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: FormaColors.primaryBlue.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: FormaColors.primaryBlue.withValues(alpha: 0.16)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: FormaColors.primaryBlue.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 20, color: FormaColors.primaryBlue),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(ctx).brightness == Brightness.dark ? Colors.white : FormaColors.lightTextMain,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(ctx).brightness == Brightness.dark
+                          ? FormaColors.darkTextMuted
+                          : FormaColors.lightTextMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.add_circle_outline_rounded, size: 18, color: FormaColors.primaryBlue),
           ],
         ),
       ),

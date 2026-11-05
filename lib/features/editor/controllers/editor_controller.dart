@@ -273,6 +273,36 @@ class EditorController extends StateNotifier<EditorState> {
     return id;
   }
 
+  String insertTextAtViewportCenter({
+    String initialText = 'Heading',
+    double fontSize = 24.0,
+    int fontWeight = 700,
+    Size viewportSize = const Size(800, 600),
+  }) {
+    final centerScreen = Offset(viewportSize.width / 2, viewportSize.height / 2);
+    final centerDoc = (centerScreen - state.panOffset) / state.zoom;
+    final tData = TextNodeData(
+      text: initialText,
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+    );
+    final measured = NodeRenderService.measureText(tData);
+    final w = math.max(140.0, measured.width + 16.0);
+    final h = math.max(40.0, measured.height + 8.0);
+    final rect = Rect.fromLTWH(
+      centerDoc.dx - w / 2,
+      centerDoc.dy - h / 2,
+      w,
+      h,
+    );
+    return createNode(
+      type: NodeType.text,
+      rect: rect,
+      textData: tData,
+      name: '$initialText Text',
+    );
+  }
+
   String insertImageNode({
     required String base64Image,
     double width = 300,

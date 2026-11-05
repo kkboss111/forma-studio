@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
 
 /// Service managing custom imported font files (.ttf, .otf) into the Flutter engine at runtime.

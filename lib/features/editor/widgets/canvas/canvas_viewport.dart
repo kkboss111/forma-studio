@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../domain/models/project_model.dart';
 import '../../../../domain/models/node_types.dart';
 import '../../../../domain/models/node_model.dart';
-import '../../../../domain/models/text_data.dart';
 import '../../../../domain/services/vector_path_service.dart';
 import '../../../../domain/services/node_render_service.dart';
 import '../../../../app/theme/forma_colors.dart';
@@ -18,12 +17,20 @@ import '../../controllers/editor_state.dart';
 import '../../controllers/editor_controller.dart';
 import '../../../settings/models/app_settings.dart';
 import '../dialogs/manual_zoom_dialog.dart';
+import '../dialogs/text_editor_dialog.dart';
 import 'canvas_painter.dart';
 
 class CanvasViewport extends ConsumerStatefulWidget {
   final ProjectModel project;
 
   const CanvasViewport({super.key, required this.project});
+
+  static Future<void> showInPlaceTextEditor(
+    BuildContext context,
+    DesignNode node,
+    EditorController controller,
+  ) =>
+      TextEditorDialog.show(context, node, controller);
 
   @override
   ConsumerState<CanvasViewport> createState() => _CanvasViewportState();
@@ -234,6 +241,79 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
                                 ),
                               ],
                             ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              // 3b. Floating Text Placement Helper Bar
+              if (state.activeTool == EditorTool.text)
+                Positioned(
+                  top: 40,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: NeuCard(
+                      radius: 20,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.title_rounded,
+                            size: 16,
+                            color: FormaColors.primaryBlue,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Click canvas to place text',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          NeuButton(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            tooltip: 'Add text at canvas center',
+                            onPressed: () {
+                              final id = controller.insertTextAtViewportCenter(
+                                viewportSize: Size(
+                                  constraints.maxWidth,
+                                  constraints.maxHeight,
+                                ),
+                              );
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                final n = controller.currentState.project.nodes[id];
+                                if (n != null && mounted) {
+                                  showInPlaceTextEditor(context, n, controller);
+                                }
+                              });
+                            },
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.add_rounded, size: 14),
+                                SizedBox(width: 4),
+                                Text('Add at Center', style: TextStyle(fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          NeuIconButton(
+                            icon: Icons.close_rounded,
+                            size: 26,
+                            iconSize: 14,
+                            tooltip: 'Cancel text placement',
+                            onPressed: () => controller.setTool(EditorTool.select),
                           ),
                         ],
                       ),
@@ -506,7 +586,7 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
             _lastTapTime != null &&
             now.difference(_lastTapTime!).inMilliseconds < 350) {
           if (hitNode.type == NodeType.text) {
-            _showInPlaceTextEditor(context, hitNode, controller);
+            showInPlaceTextEditor(context, hitNode, controller);
           }
           _lastTapNodeId = null;
           _lastTapTime = null;
@@ -793,7 +873,7 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final createdNode = controller.currentState.project.nodes[createdId];
           if (createdNode != null && mounted) {
-            _showInPlaceTextEditor(context, createdNode, controller);
+            showInPlaceTextEditor(context, createdNode, controller);
           }
         });
       }
@@ -956,70 +1036,12 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
       ),
     );
   }
-  Future<void> _showInPlaceTextEditor(
+  static Future<void> showInPlaceTextEditor(
     BuildContext context,
     DesignNode node,
     EditorController controller,
-  ) async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textCtrl = TextEditingController(text: node.textData?.text ?? '');
-
-    final newText = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Row(
-          children: [
-            Icon(Icons.title_rounded, color: FormaColors.primaryBlue),
-            SizedBox(width: 8),
-            Text('Edit Canvas Text', style: TextStyle(fontSize: 16)),
-          ],
-        ),
-        content: TextField(
-          controller: textCtrl,
-          autofocus: true,
-          maxLines: 4,
-          minLines: 1,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
-            hintText: 'Type text...',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide.none,
-            ),
-          ),
-          onSubmitted: (val) => Navigator.pop(ctx, val),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: FormaColors.primaryBlue,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () => Navigator.pop(ctx, textCtrl.text),
-            child: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (newText != null && newText.trim().isNotEmpty) {
-      final t = (node.textData ?? const TextNodeData()).copyWith(text: newText);
-      final measured = NodeRenderService.measureText(t);
-      controller.updateNode(
-        node.copyWith(
-          textData: t,
-          width: math.max(node.width, measured.width + 8.0),
-          height: math.max(node.height, measured.height + 4.0),
-        ),
-      );
-    }
-  }
+  ) =>
+      CanvasViewport.showInPlaceTextEditor(context, node, controller);
 }
 
 class _TopRulerPainter extends CustomPainter {

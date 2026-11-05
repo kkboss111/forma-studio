@@ -684,13 +684,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       color: isSelected ? FormaColors.primaryBlue : null,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight:
-                            isSelected ? FontWeight.bold : FontWeight.w500,
-                        color: isSelected ? FormaColors.primaryBlue : null,
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12.0,
+                          fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? FormaColors.primaryBlue : null,
+                        ),
                       ),
                     ),
                   ],
@@ -738,30 +742,59 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
         _buildSectionTitle('Layout & Primary Dock Placement', isDark),
         const SizedBox(height: 8),
-        ListTile(
-          title: const Text('Sidebar & Tool Dock Position'),
-          subtitle: const Text(
-            'Keep primary sidebar on Left or Right. Navigation snaps appropriately.',
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+            ),
           ),
-          trailing: SegmentedButton<SidebarSide>(
-            segments: const [
-              ButtonSegment(
-                value: SidebarSide.left,
-                label: Text('Left'),
-                icon: Icon(Icons.dock_rounded, size: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Sidebar & Tool Dock Position',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
+                ),
               ),
-              ButtonSegment(
-                value: SidebarSide.right,
-                label: Text('Right'),
-                icon: Icon(Icons.vertical_split_rounded, size: 16),
+              const SizedBox(height: 4),
+              Text(
+                'Keep primary sidebar on Left or Right. Navigation snaps appropriately.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<SidebarSide>(
+                  segments: const [
+                    ButtonSegment(
+                      value: SidebarSide.left,
+                      label: Text('Left'),
+                      icon: Icon(Icons.dock_rounded, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: SidebarSide.right,
+                      label: Text('Right'),
+                      icon: Icon(Icons.vertical_split_rounded, size: 16),
+                    ),
+                  ],
+                  selected: {settings.sidebarPrimarySide},
+                  onSelectionChanged: (val) {
+                    if (val.isNotEmpty) {
+                      notifier.setSidebarPrimarySide(val.first);
+                    }
+                  },
+                ),
               ),
             ],
-            selected: {settings.sidebarPrimarySide},
-            onSelectionChanged: (val) {
-              if (val.isNotEmpty) {
-                notifier.setSidebarPrimarySide(val.first);
-              }
-            },
           ),
         ),
         const SizedBox(height: 16),
@@ -988,11 +1021,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     children: [
                       const Icon(Icons.drag_handle_rounded, size: 16, color: Colors.grey),
                       const SizedBox(width: 10),
-                      Text(
-                        _dockItems[i],
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                      Expanded(
+                        child: Text(
+                          _dockItems[i],
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
@@ -1202,19 +1239,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
         _buildSectionTitle('Cache Management', isDark),
         const SizedBox(height: 8),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Clear App Cache & Temporary Vectors'),
-          subtitle: const Text(
-            'Purge image decoding buffers and vector caches without deleting projects.',
-          ),
-          trailing: OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: FormaColors.dangerRed,
-              side: const BorderSide(color: FormaColors.dangerRed),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
             ),
-            onPressed: _clearAppCache,
-            child: const Text('Clear Cache'),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Clear App Cache & Temporary Vectors',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Purge image decoding buffers and vector caches without deleting projects.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: FormaColors.dangerRed,
+                  side: const BorderSide(color: FormaColors.dangerRed),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.delete_sweep_rounded, size: 16),
+                onPressed: _clearAppCache,
+                label: const Text('Clear Cache'),
+              ),
+            ],
           ),
         ),
       ],

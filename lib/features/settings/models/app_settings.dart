@@ -251,6 +251,10 @@ class AppSettings {
 
 class SettingsNotifier extends StateNotifier<AppSettings> {
   static const String _prefsKey = 'forma_app_settings';
+  bool _isLoaded = false;
+  bool _hasUserModifiedState = false;
+
+  bool get isLoaded => _isLoaded;
 
   SettingsNotifier() : super(const AppSettings()) {
     _loadSettings();
@@ -260,16 +264,18 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final str = prefs.getString(_prefsKey);
-      if (str != null) {
+      if (str != null && !_hasUserModifiedState) {
         final map = jsonDecode(str) as Map<String, dynamic>;
         state = AppSettings.fromJson(map);
       }
+      _isLoaded = true;
     } catch (e) {
       debugPrint('Failed to load settings: $e');
     }
   }
 
   Future<void> _saveSettings(AppSettings newSettings) async {
+    _hasUserModifiedState = true;
     state = newSettings;
     try {
       final prefs = await SharedPreferences.getInstance();

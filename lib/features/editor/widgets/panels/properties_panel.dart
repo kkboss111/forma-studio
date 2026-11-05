@@ -21,6 +21,7 @@ import '../../../settings/models/app_settings.dart';
 import '../../controllers/editor_controller.dart';
 import '../dialogs/color_picker_dialog.dart';
 import '../dialogs/image_editor_dialog.dart';
+import '../canvas/canvas_viewport.dart';
 
 class PropertiesPanel extends ConsumerWidget {
   final ProjectModel project;
@@ -1856,22 +1857,45 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
                 color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
               ),
             ),
-            InkWell(
-              onTap: () => _showFontPickerModal(context, t),
-              borderRadius: BorderRadius.circular(6),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                child: Row(
-                  children: [
-                    const Icon(Icons.font_download_rounded, size: 14, color: FormaColors.primaryBlue),
-                    const SizedBox(width: 4),
-                    const Text(
-                      'Browse Fonts',
-                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: FormaColors.primaryBlue),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InkWell(
+                  onTap: () => CanvasViewport.showInPlaceTextEditor(context, widget.node, widget.controller),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.open_in_full_rounded, size: 12, color: FormaColors.primaryBlue),
+                        const SizedBox(width: 4),
+                        const Text(
+                          'Edit Full',
+                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: FormaColors.primaryBlue),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: 6),
+                InkWell(
+                  onTap: () => _showFontPickerModal(context, t),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.font_download_rounded, size: 13, color: FormaColors.primaryBlue),
+                        const SizedBox(width: 4),
+                        const Text(
+                          'Fonts',
+                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: FormaColors.primaryBlue),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

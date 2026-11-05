@@ -66,6 +66,8 @@ class _CommandPaletteDialogState extends State<CommandPaletteDialog> {
       CommandItem(title: 'Comment Pin Tool', subtitle: 'Leave feedback note on canvas', icon: Icons.chat_bubble_outline_rounded, shortcut: 'C', category: 'Tools', action: () => c.setTool(EditorTool.comment)),
 
       // 2. Insert Node Components
+      CommandItem(title: 'Insert Text Layer (Heading)', subtitle: 'Large bold typography heading', icon: Icons.title_rounded, shortcut: 'Ctrl+T', category: 'Insert', action: () => c.insertTextAtViewportCenter(initialText: 'Heading', fontSize: 32, fontWeight: 700)),
+      CommandItem(title: 'Insert Text Layer (Body)', subtitle: 'Standard body text block', icon: Icons.short_text_rounded, shortcut: '', category: 'Insert', action: () => c.insertTextAtViewportCenter(initialText: 'Body text...', fontSize: 16, fontWeight: 400)),
       CommandItem(title: 'Insert iPhone 15 Frame', subtitle: 'Standard Mobile 393 × 852', icon: Icons.smartphone_rounded, shortcut: 'Ctrl+1', category: 'Insert', action: () => c.createNode(type: NodeType.frame, rect: const Rect.fromLTWH(100, 100, 393, 852), name: 'iPhone 15 Frame')),
       CommandItem(title: 'Insert Android Tall Frame', subtitle: 'Mobile 412 × 923', icon: Icons.phone_android_rounded, shortcut: '', category: 'Insert', action: () => c.createNode(type: NodeType.frame, rect: const Rect.fromLTWH(100, 100, 412, 923), name: 'Android Tall Frame')),
       CommandItem(title: 'Insert iPad Tablet Frame', subtitle: 'Tablet 834 × 1194', icon: Icons.tablet_mac_rounded, shortcut: '', category: 'Insert', action: () => c.createNode(type: NodeType.frame, rect: const Rect.fromLTWH(100, 100, 834, 1194), name: 'iPad Pro Frame')),
