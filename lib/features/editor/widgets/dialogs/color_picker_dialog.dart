@@ -472,7 +472,7 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> {
           min: 0,
           max: 100,
           step: 1,
-          activeColor: const Color(0xFF8A99AD),
+          activeColor: const Color(0xFF10B981),
           onChanged: (v) {
             setState(() => _opacity = v / 100.0);
             _updateColor(_currentColor.withValues(alpha: _opacity));

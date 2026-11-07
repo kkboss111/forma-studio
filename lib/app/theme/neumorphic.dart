@@ -3,12 +3,16 @@ import 'forma_colors.dart';
 
 enum NeuStyle { raised, inset, flat }
 
-/// Helper for generating soft neumorphic BoxShadows.
+/// Helper for generating tactile, elevated, and crisp surface decorations.
+/// Conforms to /impeccable craft floor:
+/// - Light Mode: Pure white surfaces, 1px Slate-200 border, delicate dual-layer diffuse shadows.
+/// - Dark Mode: Slate-900 surfaces, 1px Slate-800 border, specular rim highlight, deep ambient elevation.
+/// - Zero muddy halos or heavy unblurred dark blobs.
 class NeuBoxDecoration {
   static BoxDecoration box({
     required BuildContext context,
     NeuStyle style = NeuStyle.raised,
-    double radius = 18.0,
+    double radius = 16.0,
     BorderRadius? borderRadius,
     Color? color,
     Border? border,
@@ -16,40 +20,24 @@ class NeuBoxDecoration {
     double intensity = 1.0,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor =
-        color ?? (isDark ? FormaColors.darkSurface : FormaColors.lightSurface);
-    final shadowDark =
-        (isDark ? FormaColors.darkShadowDark : FormaColors.lightShadowDark)
-            .withValues(alpha: isDark ? 0.9 : 0.85);
-    final shadowLight =
-        (isDark ? FormaColors.darkShadowLight : FormaColors.lightShadowLight)
-            .withValues(alpha: isDark ? 0.35 : 0.95);
-
+    final surfaceColor = color ?? (isDark ? FormaColors.darkSurface : FormaColors.lightSurface);
     final resolvedRadius = borderRadius ?? BorderRadius.circular(radius);
 
     if (style == NeuStyle.inset) {
-      // In Flutter, inner shadows can be simulated with gradient borders / subtle inset box-shadow
       return BoxDecoration(
-        color: surfaceColor,
+        color: color ?? (isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg),
         borderRadius: resolvedRadius,
-        border:
-            border ??
+        border: border ??
             Border.all(
-              color: isDark ? const Color(0xFF161A22) : const Color(0xFFD6DFEC),
+              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
               width: 1.0,
             ),
         boxShadow: [
           BoxShadow(
-            color: shadowDark.withValues(alpha: 0.25 * intensity),
-            offset: const Offset(2, 2),
-            blurRadius: 4 * intensity,
-            spreadRadius: -1,
-          ),
-          BoxShadow(
-            color: shadowLight.withValues(alpha: 0.5 * intensity),
-            offset: const Offset(-2, -2),
-            blurRadius: 4 * intensity,
-            spreadRadius: -1,
+            color: isDark ? Colors.black.withValues(alpha: 0.25 * intensity) : const Color(0x0A0F172A),
+            offset: const Offset(0, 1.5),
+            blurRadius: 3 * intensity,
+            spreadRadius: -0.5,
           ),
         ],
       );
@@ -59,8 +47,7 @@ class NeuBoxDecoration {
       return BoxDecoration(
         color: surfaceColor,
         borderRadius: resolvedRadius,
-        border:
-            border ??
+        border: border ??
             Border.all(
               color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
               width: 1.0,
@@ -68,35 +55,77 @@ class NeuBoxDecoration {
       );
     }
 
-    // Default: Raised (Reduced shadows according to UI design rules)
-    final offsetDark = Offset(2.5 * intensity, 2.5 * intensity);
-    final offsetLight = Offset(-2.5 * intensity, -2.5 * intensity);
-    final blur = 6.0 * intensity;
-
-    return BoxDecoration(
-      color: surfaceColor,
-      borderRadius: resolvedRadius,
-      border:
-          border ??
-          (isSelected
-              ? Border.all(
-                  color: FormaColors.primaryBlue.withValues(alpha: 0.6),
-                  width: 1.5,
-                )
-              : Border.all(
-                  color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-                  width: 1.0,
-                )),
-      boxShadow: [
-        BoxShadow(color: shadowDark.withValues(alpha: isDark ? 0.35 : 0.25), offset: offsetDark, blurRadius: blur),
-        BoxShadow(color: shadowLight.withValues(alpha: isDark ? 0.15 : 0.4), offset: offsetLight, blurRadius: blur),
-      ],
-    );
+    // Raised (Tactile multi-layer elevation with specular rim)
+    if (isDark) {
+      return BoxDecoration(
+        color: surfaceColor,
+        borderRadius: resolvedRadius,
+        border: border ??
+            (isSelected
+                ? Border.all(color: FormaColors.primaryBlue, width: 1.5)
+                : Border.all(color: FormaColors.darkBorder, width: 1.0)),
+        boxShadow: [
+          // Specular top rim
+          const BoxShadow(
+            color: Color(0x0FFFFFFF), // 6% top white specular
+            offset: Offset(0, 1),
+            blurRadius: 0,
+            spreadRadius: 0,
+          ),
+          // Deep ambient elevation
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35 * intensity),
+            offset: const Offset(0, 4),
+            blurRadius: 12 * intensity,
+            spreadRadius: -1,
+          ),
+          if (isSelected)
+            BoxShadow(
+              color: FormaColors.primaryBlue.withValues(alpha: 0.3),
+              offset: Offset.zero,
+              blurRadius: 10 * intensity,
+              spreadRadius: 1,
+            ),
+        ],
+      );
+    } else {
+      // Light Mode
+      return BoxDecoration(
+        color: surfaceColor,
+        borderRadius: resolvedRadius,
+        border: border ??
+            (isSelected
+                ? Border.all(color: FormaColors.primaryBlue, width: 1.5)
+                : Border.all(color: FormaColors.lightBorder, width: 1.0)),
+        boxShadow: [
+          // Crisp micro-shadow
+          BoxShadow(
+            color: const Color(0x0A0F172A).withValues(alpha: 0.05 * intensity),
+            offset: const Offset(0, 1),
+            blurRadius: 3 * intensity,
+          ),
+          // Soft ambient drop
+          BoxShadow(
+            color: const Color(0x080F172A).withValues(alpha: 0.04 * intensity),
+            offset: const Offset(0, 6),
+            blurRadius: 16 * intensity,
+            spreadRadius: -2,
+          ),
+          if (isSelected)
+            BoxShadow(
+              color: FormaColors.primaryBlue.withValues(alpha: 0.22),
+              offset: Offset.zero,
+              blurRadius: 8 * intensity,
+              spreadRadius: 1,
+            ),
+        ],
+      );
+    }
   }
 }
 
-/// A tactile neumorphic container with soft rounded corners and dual shadows.
-class NeuCard extends StatelessWidget {
+/// A tactile container with soft rounded corners, crisp borders, and subtle elevation.
+class NeuCard extends StatefulWidget {
   final Widget child;
   final double radius;
   final BorderRadius? borderRadius;
@@ -113,7 +142,7 @@ class NeuCard extends StatelessWidget {
   const NeuCard({
     super.key,
     required this.child,
-    this.radius = 20.0,
+    this.radius = 16.0,
     this.borderRadius,
     this.padding = const EdgeInsets.all(16.0),
     this.margin,
@@ -127,36 +156,54 @@ class NeuCard extends StatelessWidget {
   });
 
   @override
+  State<NeuCard> createState() => _NeuCardState();
+}
+
+class _NeuCardState extends State<NeuCard> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    Widget content = Container(
-      width: width,
-      height: height,
-      margin: margin,
-      padding: padding,
+    Widget card = AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+      width: widget.width,
+      height: widget.height,
+      margin: widget.margin,
+      padding: widget.padding,
+      transform: (widget.onTap != null && _isHovered)
+          ? Matrix4.translationValues(0, -2.0, 0)
+          : Matrix4.identity(),
       decoration: NeuBoxDecoration.box(
         context: context,
-        style: style,
-        radius: radius,
-        borderRadius: borderRadius,
-        color: color,
-        border: border,
-        isSelected: isSelected,
+        style: widget.style,
+        radius: widget.radius,
+        borderRadius: widget.borderRadius,
+        color: widget.color,
+        border: widget.border,
+        isSelected: widget.isSelected,
+        intensity: _isHovered ? 1.25 : 1.0,
       ),
-      child: child,
+      child: widget.child,
     );
 
-    if (onTap != null) {
-      return GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: content,
+    if (widget.onTap != null) {
+      return MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: card,
+        ),
       );
     }
-    return content;
+    return card;
   }
 }
 
-/// A neumorphic tactile button with active/pressed state feedback.
+/// A tactile button with interactive spring press feedback (/animate).
 class NeuButton extends StatefulWidget {
   final Widget child;
   final VoidCallback? onPressed;
@@ -172,8 +219,8 @@ class NeuButton extends StatefulWidget {
     super.key,
     required this.child,
     this.onPressed,
-    this.radius = 16.0,
-    this.padding = const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+    this.radius = 14.0,
+    this.padding = const EdgeInsets.symmetric(horizontal: 14.0, vertical: 9.0),
     this.isActive = false,
     this.color,
     this.width,
@@ -191,10 +238,16 @@ class _NeuButtonState extends State<NeuButton> {
 
   @override
   Widget build(BuildContext context) {
-    final style = (_isPressed || widget.isActive)
-        ? NeuStyle.inset
-        : NeuStyle.raised;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    Color? resolvedColor = widget.color;
+    if (widget.isActive) {
+      resolvedColor = FormaColors.primaryBlue.withValues(alpha: isDark ? 0.22 : 0.12);
+    } else if (_isHovered && widget.onPressed != null) {
+      resolvedColor = isDark
+          ? const Color(0xFF1E293B)
+          : const Color(0xFFF1F5F9);
+    }
 
     Widget btn = MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -211,29 +264,29 @@ class _NeuButtonState extends State<NeuButton> {
             : null,
         onTapCancel: () => setState(() => _isPressed = false),
         onTap: widget.onPressed,
-        child: AnimatedContainer(
+        child: AnimatedScale(
+          scale: _isPressed ? 0.95 : (_isHovered && widget.onPressed != null ? 1.02 : 1.0),
           duration: const Duration(milliseconds: 120),
-          width: widget.width,
-          height: widget.height,
-          padding: widget.padding,
-          decoration: NeuBoxDecoration.box(
-            context: context,
-            style: style,
-            radius: widget.radius,
-            color:
-                widget.color ??
-                (_isHovered && !widget.isActive
-                    ? (isDark
-                          ? const Color(0xFF232A37)
-                          : const Color(0xFFEDF3FC))
-                    : null),
-            isSelected: widget.isActive,
-            intensity: _isPressed ? 0.6 : 1.0,
-          ),
-          child: Center(
-            widthFactor: 1.0,
-            heightFactor: 1.0,
-            child: widget.child,
+          curve: Curves.easeOutCubic,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOutCubic,
+            width: widget.width,
+            height: widget.height,
+            padding: widget.padding,
+            decoration: NeuBoxDecoration.box(
+              context: context,
+              style: widget.isActive ? NeuStyle.inset : NeuStyle.raised,
+              radius: widget.radius,
+              color: resolvedColor,
+              isSelected: widget.isActive,
+              intensity: _isPressed ? 0.6 : (_isHovered ? 1.2 : 1.0),
+            ),
+            child: Center(
+              widthFactor: 1.0,
+              heightFactor: 1.0,
+              child: widget.child,
+            ),
           ),
         ),
       ),
@@ -246,7 +299,7 @@ class _NeuButtonState extends State<NeuButton> {
   }
 }
 
-/// Neumorphic Icon Button, matching the style of the reference buttons.
+/// Tactile Icon Button with 40-44px touch targets.
 class NeuIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onPressed;
@@ -284,12 +337,16 @@ class NeuIconButton extends StatelessWidget {
       isActive: isActive,
       onPressed: onPressed,
       tooltip: tooltip,
-      child: Icon(icon, size: iconSize, color: iconColor ?? defaultColor),
+      child: Icon(
+        icon,
+        size: iconSize,
+        color: iconColor ?? defaultColor,
+      ),
     );
   }
 }
 
-/// Inset well panel (like stat cards and property input background).
+/// Inset well panel for property fields and preview containers.
 class NeuWell extends StatelessWidget {
   final Widget child;
   final double radius;
@@ -301,7 +358,7 @@ class NeuWell extends StatelessWidget {
   const NeuWell({
     super.key,
     required this.child,
-    this.radius = 14.0,
+    this.radius = 12.0,
     this.padding = const EdgeInsets.all(12.0),
     this.color,
     this.width,
@@ -325,7 +382,7 @@ class NeuWell extends StatelessWidget {
   }
 }
 
-/// Neumorphic Pill badge or interactive toggle chip.
+/// Tactile interactive pill badge.
 class NeuPill extends StatelessWidget {
   final Widget child;
   final bool isSelected;
@@ -354,7 +411,9 @@ class NeuPill extends StatelessWidget {
           style: isSelected ? NeuStyle.inset : NeuStyle.raised,
           radius: radius,
           isSelected: isSelected,
-          intensity: 0.7,
+          color: isSelected
+              ? FormaColors.primaryBlue.withValues(alpha: 0.15)
+              : null,
         ),
         child: child,
       ),
@@ -362,7 +421,7 @@ class NeuPill extends StatelessWidget {
   }
 }
 
-/// Neumorphic Text Field with smooth inset well.
+/// Tactile input text field with subtle inset well background and crisp borders.
 class NeuTextField extends StatelessWidget {
   final TextEditingController? controller;
   final String? hintText;
@@ -390,12 +449,8 @@ class NeuTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark
-        ? FormaColors.darkTextMain
-        : FormaColors.lightTextMain;
-    final hintColor = isDark
-        ? FormaColors.darkTextMuted
-        : FormaColors.lightTextMuted;
+    final textColor = isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain;
+    final hintColor = isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted;
 
     return NeuWell(
       radius: radius,

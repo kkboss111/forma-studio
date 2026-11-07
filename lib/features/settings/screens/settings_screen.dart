@@ -1532,7 +1532,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               SizedBox(height: 4),
               Text(
-                'v0.1 (Beta Testing)',
+                'v0.3.0 (Studio Release)',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,

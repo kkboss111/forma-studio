@@ -197,7 +197,7 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                               SizedBox(width: 6),
                               Text(
-                                'v0.1 (Beta Testing)',
+                                'v0.3.0 (Release Edition)',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,

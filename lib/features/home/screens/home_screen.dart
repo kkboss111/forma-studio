@@ -1169,7 +1169,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                       ),
                       const Text(
-                        'v0.1 (Beta Testing)',
+                        'v0.3 (Studio Edition)',
                         maxLines: 1,
                         style: TextStyle(
                           fontSize: 8.5,
@@ -1609,7 +1609,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Welcome to Forma Studio v0.1 (Beta Testing)',
+                      'Welcome to Forma Studio v0.3',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
@@ -2388,7 +2388,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: const Text('About Forma Studio'),
         content: const Text(
           'Forma Studio is a free, mobile-first, Figma-inspired design application with a soft blue-gray neumorphic interface.\n\n'
-          'Version: v0.1 (Beta Testing)\n\n'
+          'Version: v0.3.0 (Latest Release)\n\n'
           'Features include versioned document models, offline autosaving, interactive canvas engine, command-based history, auto-layout, prototype player, and SVG/PDF/PNG exports.',
         ),
         actions: [
