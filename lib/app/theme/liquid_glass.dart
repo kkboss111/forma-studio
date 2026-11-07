@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'forma_theme.dart';
 
 /// Styling parameters and design tokens for the Liquid Glass theme
 /// modeled after macOS translucent glass design specs.
@@ -11,16 +12,15 @@ class LiquidGlassTheme {
   static const Color textMuted = Color(0xFF5A738C);
   static const Color textLight = Color(0xFFFFFFFF);
 
-  // Background Gradient matching reference:
-  // radial-gradient(circle at 10% 20%, #4facfe 0%, #00f2fe 30%, #38ef7d 60%, #11998e 100%)
+  // Background Gradient matching reference: macOS Sonoma fluid sky mesh
   static const LinearGradient liquidMeshGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [
-      Color(0xFF4FACFE),
-      Color(0xFF00F2FE),
-      Color(0xFF38EF7D),
-      Color(0xFF11998E),
+      Color(0xFFE0F2FE), // Sky-100
+      Color(0xFFBAE6FD), // Sky-200
+      Color(0xFF7DD3FC), // Sky-300
+      Color(0xFF38BDF8), // Sky-400
     ],
     stops: [0.0, 0.35, 0.70, 1.0],
   );
@@ -55,7 +55,7 @@ class LiquidGlassBox extends StatelessWidget {
     super.key,
     required this.child,
     this.radius = 20,
-    this.blur = 30.0,
+    this.blur = 24.0,
     this.opacity = 0.45,
     this.hasBorder = true,
     this.hasSpecular = true,
@@ -69,7 +69,12 @@ class LiquidGlassBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final baseColor = tintColor ?? const Color(0xFFDCF5FF);
+    final tokens = FormaTheme.tokensOf(context);
+    final isDarkGlass = tokens.isDark;
+    final baseColor = tintColor ??
+        (isDarkGlass
+            ? const Color(0x1AFFFFFF)
+            : Colors.white.withValues(alpha: opacity > 0.6 ? opacity : 0.82));
 
     return Container(
       width: width,
@@ -77,21 +82,35 @@ class LiquidGlassBox extends StatelessWidget {
       margin: margin,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF001E46).withValues(alpha: 0.18),
-            offset: const Offset(0, 12),
-            blurRadius: 36,
-            spreadRadius: -4,
-          ),
-          if (hasSpecular)
-            BoxShadow(
-              color: Colors.white.withValues(alpha: 0.4),
-              offset: const Offset(0, 1),
-              blurRadius: 1,
-              spreadRadius: 0,
-            ),
-        ],
+        boxShadow: isDarkGlass
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  offset: const Offset(0, 16),
+                  blurRadius: 36,
+                  spreadRadius: -4,
+                ),
+                if (hasSpecular)
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    offset: const Offset(0, 1),
+                    blurRadius: 1,
+                  ),
+              ]
+            : [
+                BoxShadow(
+                  color: const Color(0xFF0284C7).withValues(alpha: 0.14),
+                  offset: const Offset(0, 12),
+                  blurRadius: 32,
+                  spreadRadius: -4,
+                ),
+                if (hasSpecular)
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    offset: const Offset(0, 1),
+                    blurRadius: 1,
+                  ),
+              ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
@@ -100,11 +119,13 @@ class LiquidGlassBox extends StatelessWidget {
           child: Container(
             padding: padding,
             decoration: BoxDecoration(
-              color: baseColor.withValues(alpha: opacity),
+              color: baseColor,
               borderRadius: BorderRadius.circular(radius),
               border: hasBorder
                   ? Border.all(
-                      color: Colors.white.withValues(alpha: 0.65),
+                      color: isDarkGlass
+                          ? const Color(0x2EFFFFFF)
+                          : Colors.white.withValues(alpha: 0.85),
                       width: 1.0,
                     )
                   : null,
@@ -125,7 +146,7 @@ class LiquidGlassBox extends StatelessWidget {
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                             colors: [
-                              Colors.white.withValues(alpha: 0.35),
+                              Colors.white.withValues(alpha: isDarkGlass ? 0.15 : 0.35),
                               Colors.white.withValues(alpha: 0.0),
                             ],
                           ),

@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,6 +6,7 @@ import '../../../../domain/models/project_model.dart';
 import '../../../../domain/models/node_model.dart';
 import '../../../../domain/models/node_types.dart';
 import '../../../../app/theme/forma_colors.dart';
+import '../../../../app/theme/forma_theme.dart';
 import '../../controllers/editor_controller.dart';
 import '../../controllers/editor_state.dart';
 
@@ -29,15 +31,17 @@ class _LayersPanelState extends ConsumerState<LayersPanel> {
 
     if (page == null) return const SizedBox.shrink();
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tokens = FormaTheme.tokensOf(context);
+    final isDark = tokens.isDark;
 
-    return Container(
+    Widget panel = Container(
       width: widget.width,
       decoration: BoxDecoration(
-        color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
+        color: tokens.surface,
         border: Border(
           right: BorderSide(
-            color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+            color: tokens.border,
+            width: 1.0,
           ),
         ),
       ),
@@ -282,6 +286,17 @@ class _LayersPanelState extends ConsumerState<LayersPanel> {
         ],
       ),
     );
+
+    if (tokens.isGlass && tokens.cardBlur > 0) {
+      return ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: tokens.cardBlur, sigmaY: tokens.cardBlur),
+          child: panel,
+        ),
+      );
+    }
+
+    return panel;
   }
 
   void _insertNodeFromMenu(String choice, EditorController controller, dynamic state) {

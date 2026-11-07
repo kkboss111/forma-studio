@@ -42,7 +42,7 @@ class FormaApp extends ConsumerWidget {
         (settings.themeMode == FormaThemeMode.system && isSystemDark);
 
     return MaterialApp(
-      title: 'Forma Studio v0.3 (Beta Testing)',
+      title: 'Forma Studio',
       debugShowCheckedModeBanner: false,
       theme: activeLightTheme,
       darkTheme: activeDarkTheme,
@@ -50,13 +50,14 @@ class FormaApp extends ConsumerWidget {
       home: SplashScreen(
         onToggleTheme: () {
           final cur = ref.read(settingsProvider);
-          final curSystemDark = View.of(context).platformDispatcher.platformBrightness ==
-              Brightness.dark;
-          final isCurrentlyDark = cur.themeMode == FormaThemeMode.dark ||
-              (cur.themeMode == FormaThemeMode.system && curSystemDark);
-          notifier.setThemeMode(
-            isCurrentlyDark ? FormaThemeMode.light : FormaThemeMode.dark,
-          );
+          final nextMode = switch (cur.themeMode) {
+            FormaThemeMode.light => FormaThemeMode.dark,
+            FormaThemeMode.dark => FormaThemeMode.liquidGlass,
+            FormaThemeMode.liquidGlass => FormaThemeMode.glassmorphism,
+            FormaThemeMode.glassmorphism => FormaThemeMode.light,
+            FormaThemeMode.system => FormaThemeMode.dark,
+          };
+          notifier.setThemeMode(nextMode);
         },
         isDarkMode: isDark,
       ),

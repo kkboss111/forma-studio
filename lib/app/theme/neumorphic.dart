@@ -1,13 +1,16 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'forma_colors.dart';
+import 'forma_theme.dart';
 
 enum NeuStyle { raised, inset, flat }
 
 /// Helper for generating tactile, elevated, and crisp surface decorations.
-/// Conforms to /impeccable craft floor:
+/// Dynamically adapts to all 4 Forma themes (Light, Dark, Liquid Glass, Cosmic Glassmorphism):
 /// - Light Mode: Pure white surfaces, 1px Slate-200 border, delicate dual-layer diffuse shadows.
 /// - Dark Mode: Slate-900 surfaces, 1px Slate-800 border, specular rim highlight, deep ambient elevation.
-/// - Zero muddy halos or heavy unblurred dark blobs.
+/// - Liquid Glass: Frosted translucent white fluid glass, luminous specular white borders, cyan active glow.
+/// - Cosmic Glassmorphism: Starlight frosted dark glass, luminous starlight borders, nebula violet/gold glow.
 class NeuBoxDecoration {
   static BoxDecoration box({
     required BuildContext context,
@@ -19,22 +22,73 @@ class NeuBoxDecoration {
     bool isSelected = false,
     double intensity = 1.0,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = color ?? (isDark ? FormaColors.darkSurface : FormaColors.lightSurface);
+    final tokens = FormaTheme.tokensOf(context);
+    final surfaceColor = color ?? tokens.surface;
     final resolvedRadius = borderRadius ?? BorderRadius.circular(radius);
 
+    // 1. Frosted Glass Decorations (Liquid Glass & Cosmic Glassmorphism)
+    if (tokens.isGlass) {
+      if (style == NeuStyle.inset) {
+        return BoxDecoration(
+          color: color ?? tokens.wellBg,
+          borderRadius: resolvedRadius,
+          border: border ??
+              Border.all(
+                color: tokens.border,
+                width: 1.0,
+              ),
+        );
+      }
+
+      if (style == NeuStyle.flat) {
+        return BoxDecoration(
+          color: surfaceColor,
+          borderRadius: resolvedRadius,
+          border: border ??
+              Border.all(
+                color: tokens.border,
+                width: 1.0,
+              ),
+        );
+      }
+
+      // Raised Glass (Frosted glass card with specular rim and ambient elevation)
+      return BoxDecoration(
+        color: surfaceColor,
+        borderRadius: resolvedRadius,
+        border: border ??
+            (isSelected
+                ? Border.all(color: tokens.accent, width: 1.5)
+                : Border.all(color: tokens.border, width: 1.0)),
+        boxShadow: isSelected
+            ? [
+                ...tokens.cardShadow,
+                BoxShadow(
+                  color: tokens.activeGlow,
+                  offset: Offset.zero,
+                  blurRadius: 10 * intensity,
+                  spreadRadius: 1,
+                ),
+              ]
+            : tokens.cardShadow,
+      );
+    }
+
+    // 2. Solid Inset Well
     if (style == NeuStyle.inset) {
       return BoxDecoration(
-        color: color ?? (isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg),
+        color: color ?? tokens.wellBg,
         borderRadius: resolvedRadius,
         border: border ??
             Border.all(
-              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+              color: tokens.border,
               width: 1.0,
             ),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black.withValues(alpha: 0.25 * intensity) : const Color(0x0A0F172A),
+            color: tokens.isDark
+                ? Colors.black.withValues(alpha: 0.25 * intensity)
+                : const Color(0x0A0F172A),
             offset: const Offset(0, 1.5),
             blurRadius: 3 * intensity,
             spreadRadius: -0.5,
@@ -43,27 +97,28 @@ class NeuBoxDecoration {
       );
     }
 
+    // 3. Solid Flat Surface
     if (style == NeuStyle.flat) {
       return BoxDecoration(
         color: surfaceColor,
         borderRadius: resolvedRadius,
         border: border ??
             Border.all(
-              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+              color: tokens.border,
               width: 1.0,
             ),
       );
     }
 
-    // Raised (Tactile multi-layer elevation with specular rim)
-    if (isDark) {
+    // 4. Solid Raised Surface (Obsidian Dark or Modern Studio Light)
+    if (tokens.isDark) {
       return BoxDecoration(
         color: surfaceColor,
         borderRadius: resolvedRadius,
         border: border ??
             (isSelected
                 ? Border.all(color: FormaColors.primaryBlue, width: 1.5)
-                : Border.all(color: FormaColors.darkBorder, width: 1.0)),
+                : Border.all(color: tokens.border, width: 1.0)),
         boxShadow: [
           // Specular top rim
           const BoxShadow(
@@ -96,7 +151,7 @@ class NeuBoxDecoration {
         border: border ??
             (isSelected
                 ? Border.all(color: FormaColors.primaryBlue, width: 1.5)
-                : Border.all(color: FormaColors.lightBorder, width: 1.0)),
+                : Border.all(color: tokens.border, width: 1.0)),
         boxShadow: [
           // Crisp micro-shadow
           BoxShadow(
@@ -125,6 +180,7 @@ class NeuBoxDecoration {
 }
 
 /// A tactile container with soft rounded corners, crisp borders, and subtle elevation.
+/// When in a glass theme, automatically applies BackdropFilter blur.
 class NeuCard extends StatefulWidget {
   final Widget child;
   final double radius;
@@ -164,16 +220,15 @@ class _NeuCardState extends State<NeuCard> {
 
   @override
   Widget build(BuildContext context) {
-    Widget card = AnimatedContainer(
+    final tokens = FormaTheme.tokensOf(context);
+    final resolvedRadius = widget.borderRadius ?? BorderRadius.circular(widget.radius);
+
+    Widget cardContent = AnimatedContainer(
       duration: const Duration(milliseconds: 160),
       curve: Curves.easeOutCubic,
       width: widget.width,
       height: widget.height,
-      margin: widget.margin,
       padding: widget.padding,
-      transform: (widget.onTap != null && _isHovered)
-          ? Matrix4.translationValues(0, -2.0, 0)
-          : Matrix4.identity(),
       decoration: NeuBoxDecoration.box(
         context: context,
         style: widget.style,
@@ -185,6 +240,29 @@ class _NeuCardState extends State<NeuCard> {
         intensity: _isHovered ? 1.25 : 1.0,
       ),
       child: widget.child,
+    );
+
+    if (tokens.isGlass && tokens.cardBlur > 0) {
+      cardContent = ClipRRect(
+        borderRadius: resolvedRadius,
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(
+            sigmaX: tokens.cardBlur,
+            sigmaY: tokens.cardBlur,
+          ),
+          child: cardContent,
+        ),
+      );
+    }
+
+    Widget card = AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+      margin: widget.margin,
+      transform: (widget.onTap != null && _isHovered)
+          ? Matrix4.translationValues(0, -2.0, 0)
+          : Matrix4.identity(),
+      child: cardContent,
     );
 
     if (widget.onTap != null) {
@@ -204,6 +282,7 @@ class _NeuCardState extends State<NeuCard> {
 }
 
 /// A tactile button with interactive spring press feedback (/animate).
+/// When in a glass theme, renders as a frosted translucent glass pill.
 class NeuButton extends StatefulWidget {
   final Widget child;
   final VoidCallback? onPressed;
@@ -238,15 +317,53 @@ class _NeuButtonState extends State<NeuButton> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tokens = FormaTheme.tokensOf(context);
 
     Color? resolvedColor = widget.color;
     if (widget.isActive) {
-      resolvedColor = FormaColors.primaryBlue.withValues(alpha: isDark ? 0.22 : 0.12);
+      resolvedColor = tokens.accent.withValues(alpha: tokens.isDark ? 0.25 : 0.15);
     } else if (_isHovered && widget.onPressed != null) {
-      resolvedColor = isDark
-          ? const Color(0xFF1E293B)
-          : const Color(0xFFF1F5F9);
+      resolvedColor = tokens.isGlass
+          ? (tokens.isDark
+              ? Colors.white.withValues(alpha: 0.18)
+              : Colors.white.withValues(alpha: 0.95))
+          : (tokens.isDark
+              ? const Color(0xFF1E293B)
+              : const Color(0xFFF1F5F9));
+    }
+
+    Widget buttonContent = AnimatedContainer(
+      duration: const Duration(milliseconds: 140),
+      curve: Curves.easeOutCubic,
+      width: widget.width,
+      height: widget.height,
+      padding: widget.padding,
+      decoration: NeuBoxDecoration.box(
+        context: context,
+        style: widget.isActive ? NeuStyle.inset : NeuStyle.raised,
+        radius: widget.radius,
+        color: resolvedColor,
+        isSelected: widget.isActive,
+        intensity: _isPressed ? 0.6 : (_isHovered ? 1.2 : 1.0),
+      ),
+      child: Center(
+        widthFactor: 1.0,
+        heightFactor: 1.0,
+        child: widget.child,
+      ),
+    );
+
+    if (tokens.isGlass && tokens.cardBlur > 0) {
+      buttonContent = ClipRRect(
+        borderRadius: BorderRadius.circular(widget.radius),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(
+            sigmaX: tokens.cardBlur * 0.75,
+            sigmaY: tokens.cardBlur * 0.75,
+          ),
+          child: buttonContent,
+        ),
+      );
     }
 
     Widget btn = MouseRegion(
@@ -268,26 +385,7 @@ class _NeuButtonState extends State<NeuButton> {
           scale: _isPressed ? 0.95 : (_isHovered && widget.onPressed != null ? 1.02 : 1.0),
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOutCubic,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            curve: Curves.easeOutCubic,
-            width: widget.width,
-            height: widget.height,
-            padding: widget.padding,
-            decoration: NeuBoxDecoration.box(
-              context: context,
-              style: widget.isActive ? NeuStyle.inset : NeuStyle.raised,
-              radius: widget.radius,
-              color: resolvedColor,
-              isSelected: widget.isActive,
-              intensity: _isPressed ? 0.6 : (_isHovered ? 1.2 : 1.0),
-            ),
-            child: Center(
-              widthFactor: 1.0,
-              heightFactor: 1.0,
-              child: widget.child,
-            ),
-          ),
+          child: buttonContent,
         ),
       ),
     );
@@ -324,10 +422,10 @@ class NeuIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tokens = FormaTheme.tokensOf(context);
     final defaultColor = isActive
-        ? FormaColors.primaryBlue
-        : (isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain);
+        ? tokens.accent
+        : (tokens.isDark ? tokens.textMain : tokens.textMain);
 
     return NeuButton(
       width: size,
@@ -354,6 +452,7 @@ class NeuWell extends StatelessWidget {
   final Color? color;
   final double? width;
   final double? height;
+  final Border? border;
 
   const NeuWell({
     super.key,
@@ -363,6 +462,7 @@ class NeuWell extends StatelessWidget {
     this.color,
     this.width,
     this.height,
+    this.border,
   });
 
   @override
@@ -376,6 +476,7 @@ class NeuWell extends StatelessWidget {
         style: NeuStyle.inset,
         radius: radius,
         color: color,
+        border: border,
       ),
       child: child,
     );
@@ -401,6 +502,8 @@ class NeuPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = FormaTheme.tokensOf(context);
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -412,7 +515,7 @@ class NeuPill extends StatelessWidget {
           radius: radius,
           isSelected: isSelected,
           color: isSelected
-              ? FormaColors.primaryBlue.withValues(alpha: 0.15)
+              ? tokens.accent.withValues(alpha: tokens.isDark ? 0.22 : 0.15)
               : null,
         ),
         child: child,
@@ -448,9 +551,7 @@ class NeuTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain;
-    final hintColor = isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted;
+    final tokens = FormaTheme.tokensOf(context);
 
     return NeuWell(
       radius: radius,
@@ -466,15 +567,15 @@ class NeuTextField extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: textColor,
+                color: tokens.textMain,
               ),
-              cursorColor: FormaColors.primaryBlue,
+              cursorColor: tokens.accent,
               decoration: InputDecoration(
                 hintText: hintText,
                 hintStyle: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w400,
-                  color: hintColor,
+                  color: tokens.textMuted,
                 ),
                 isDense: true,
                 border: InputBorder.none,

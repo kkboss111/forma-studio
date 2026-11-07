@@ -8,6 +8,7 @@ import '../../../app/theme/forma_theme.dart';
 import '../../../app/theme/neumorphic.dart';
 import '../../../app/theme/liquid_glass.dart';
 import '../../../app/widgets/forma_logo.dart';
+import '../../../app/widgets/forma_ambient_backdrop.dart';
 import '../../../core/export/file_saver_service.dart';
 import '../../../core/persistence/project_repository.dart';
 import '../../../domain/models/project_model.dart';
@@ -365,11 +366,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
-    final isGlass = settings.themeMode == FormaThemeMode.liquidGlass ||
-        settings.themeMode == FormaThemeMode.glassmorphism;
-    final isDark = settings.themeMode == FormaThemeMode.dark ||
-        (settings.themeMode == FormaThemeMode.system &&
-            Theme.of(context).brightness == Brightness.dark);
+    final isSystemDark = Theme.of(context).brightness == Brightness.dark;
+    final tokens = FormaTheme.tokensForMode(settings.themeMode, isSystemDark: isSystemDark);
+    final isGlass = tokens.isGlass;
+    final isDark = tokens.isDark;
 
     final bgColor = isGlass
         ? null
@@ -537,18 +537,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
     );
 
-    if (isGlass) {
-      return Container(
-        decoration: settings.themeMode == FormaThemeMode.glassmorphism
-            ? FormaTheme.glassmorphismCosmicGradient
-            : const BoxDecoration(
-                gradient: LiquidGlassTheme.liquidMeshGradient,
-              ),
-        child: content,
-      );
-    }
-
-    return content;
+    return FormaAmbientBackdrop(explicitTokens: tokens, child: content);
   }
 
   Widget _buildNavigationList(bool isDark, bool isGlass) {

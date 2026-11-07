@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -13,6 +14,8 @@ import '../../../app/theme/neumorphic.dart';
 import '../../../app/theme/liquid_glass.dart';
 import '../../../app/widgets/forma_logo.dart';
 import '../../../app/widgets/studio_loading_transition.dart';
+import '../../../app/widgets/forma_ambient_backdrop.dart';
+import '../../../app/widgets/forma_theme_picker_dialog.dart';
 import '../widgets/forma_documentation_dialog.dart';
 import 'splash_screen.dart';
 import '../../../core/persistence/project_repository.dart';
@@ -375,48 +378,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _toggleTheme() {
-    final currentSettings = ref.read(settingsProvider);
-    final isCurrentlyDark = currentSettings.themeMode == FormaThemeMode.dark ||
-        (currentSettings.themeMode == FormaThemeMode.system &&
+    final current = ref.read(settingsProvider);
+    final isCurrentlyDark = current.themeMode == FormaThemeMode.dark ||
+        (current.themeMode == FormaThemeMode.system &&
             MediaQuery.platformBrightnessOf(context) == Brightness.dark);
     final nextMode = isCurrentlyDark ? FormaThemeMode.light : FormaThemeMode.dark;
     ref.read(settingsProvider.notifier).setThemeMode(nextMode);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(
-                nextMode == FormaThemeMode.dark
-                    ? Icons.dark_mode_rounded
-                    : Icons.light_mode_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  nextMode == FormaThemeMode.dark
-                      ? 'Deep Slate Dark Mode enabled'
-                      : 'Soft Neumorphic Light Mode enabled',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: nextMode == FormaThemeMode.dark
-              ? const Color(0xFF1E242F)
-              : const Color(0xFF2B3445),
-          duration: const Duration(milliseconds: 1400),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-    }
   }
 
   void _reloadAppAndIntro() {
@@ -787,12 +754,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
-    final isGlass = settings.themeMode == FormaThemeMode.liquidGlass ||
-        settings.themeMode == FormaThemeMode.glassmorphism;
-    final isDark = settings.themeMode == FormaThemeMode.dark ||
-        settings.themeMode == FormaThemeMode.glassmorphism ||
-        (settings.themeMode == FormaThemeMode.system &&
-            Theme.of(context).brightness == Brightness.dark);
+    final isSystemDark = Theme.of(context).brightness == Brightness.dark;
+    final tokens = FormaTheme.tokensForMode(settings.themeMode, isSystemDark: isSystemDark);
+    final isGlass = tokens.isGlass;
+    final isDark = tokens.isDark;
 
     Widget content = Scaffold(
       key: _scaffoldKey,
@@ -800,9 +765,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ? Colors.transparent
           : (isDark ? FormaColors.darkBg : FormaColors.lightBg),
       drawer: Drawer(
-        backgroundColor: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
+        backgroundColor: tokens.isGlass ? tokens.surface : (isDark ? FormaColors.darkSurface : FormaColors.lightSurface),
         child: SafeArea(
-          child: _buildSidebarContent(context, isDark, isGlass),
+          child: tokens.isGlass && tokens.cardBlur > 0
+              ? ClipRect(
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: tokens.cardBlur, sigmaY: tokens.cardBlur),
+                    child: _buildSidebarContent(context, isDark, isGlass),
+                  ),
+                )
+              : _buildSidebarContent(context, isDark, isGlass),
         ),
       ),
       body: SafeArea(
@@ -841,27 +813,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           : null,
     );
 
-    if (isGlass) {
-      return Container(
-        decoration: settings.themeMode == FormaThemeMode.glassmorphism
-            ? FormaTheme.glassmorphismCosmicGradient
-            : const BoxDecoration(
-                gradient: LiquidGlassTheme.liquidMeshGradient,
-              ),
-        child: content,
-      );
-    }
-
-    return content;
+    return FormaAmbientBackdrop(explicitTokens: tokens, child: content);
   }
 
   Widget _buildMobileBottomNav(bool isDark, bool isGlass) {
-    return Container(
+    final tokens = FormaTheme.tokensOf(context);
+
+    Widget nav = Container(
       decoration: BoxDecoration(
-        color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
+        color: tokens.surface,
         border: Border(
           top: BorderSide(
-            color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+            color: tokens.border,
+            width: 1.0,
           ),
         ),
       ),
@@ -869,6 +833,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         height: 60,
         backgroundColor: Colors.transparent,
         elevation: 0,
+        indicatorColor: tokens.accent.withValues(alpha: tokens.isDark ? 0.25 : 0.15),
         selectedIndex: _activeTab == 'recent'
             ? 0
             : _activeTab == 'templates'
@@ -908,6 +873,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
     );
+
+    if (tokens.isGlass && tokens.cardBlur > 0) {
+      return ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: tokens.cardBlur, sigmaY: tokens.cardBlur),
+          child: nav,
+        ),
+      );
+    }
+
+    return nav;
   }
 
   Widget _buildSidebar(
@@ -1128,6 +1104,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildMobileHeader(BuildContext context, bool isDark) {
+    final tokens = FormaTheme.tokensOf(context);
     final screenWidth = MediaQuery.of(context).size.width;
 
     return Padding(
@@ -1226,7 +1203,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               const SizedBox(width: 6),
 
-              // THEME TOGGLE BUTTON - PROMINENT, RELIABLE, FULLY INTERACTIVE
+              // Theme Toggle Button (Light / Dark instant toggle)
               NeuIconButton(
                 icon: isDark
                     ? Icons.light_mode_rounded
@@ -1238,6 +1215,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     : const Color(0xFF6366F1),
                 tooltip: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
                 onPressed: _toggleTheme,
+              ),
+              const SizedBox(width: 6),
+
+              // Studio Themes Palette (Direct access to all 4 themes including Liquid Glass & Cosmic)
+              NeuIconButton(
+                icon: Icons.palette_outlined,
+                size: 36,
+                iconSize: 18,
+                iconColor: tokens.accent,
+                tooltip: 'Studio Themes (Light, Dark, Liquid, Cosmic)',
+                onPressed: () => FormaThemePickerDialog.show(context),
               ),
               const SizedBox(width: 6),
 

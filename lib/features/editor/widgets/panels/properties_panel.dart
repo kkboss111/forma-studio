@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import '../../../../domain/services/custom_font_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +16,7 @@ import '../../../../domain/models/constraints.dart';
 import '../../../../domain/models/text_data.dart';
 import '../../../../domain/services/node_render_service.dart';
 import '../../../../app/theme/forma_colors.dart';
+import '../../../../app/theme/forma_theme.dart';
 import '../../../../app/theme/neumorphic.dart';
 import '../../../../app/theme/touch_controls.dart';
 import '../../../settings/models/app_settings.dart';
@@ -33,20 +35,22 @@ class PropertiesPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(editorControllerProvider(project));
     final controller = ref.read(editorControllerProvider(project).notifier);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tokens = FormaTheme.tokensOf(context);
+    final isDark = tokens.isDark;
 
     final selectedIds = state.selectedNodeIds;
     final primaryNode = selectedIds.isNotEmpty
         ? state.project.nodes[selectedIds.first]
         : null;
 
-    return Container(
+    Widget panel = Container(
       width: width,
       decoration: BoxDecoration(
-        color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
+        color: tokens.surface,
         border: Border(
           left: BorderSide(
-            color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+            color: tokens.border,
+            width: 1.0,
           ),
         ),
       ),
@@ -108,6 +112,17 @@ class PropertiesPanel extends ConsumerWidget {
         ],
       ),
     );
+
+    if (tokens.isGlass && tokens.cardBlur > 0) {
+      return ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: tokens.cardBlur, sigmaY: tokens.cardBlur),
+          child: panel,
+        ),
+      );
+    }
+
+    return panel;
   }
 
   Widget _buildVectorPathSection(

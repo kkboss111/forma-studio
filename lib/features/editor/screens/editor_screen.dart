@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import '../widgets/dialogs/icon_editor_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +15,8 @@ import '../../../app/theme/liquid_glass.dart';
 import '../../../app/theme/responsive_breakpoints.dart';
 import '../../../app/widgets/forma_logo.dart';
 import '../../../app/widgets/studio_loading_transition.dart';
+import '../../../app/widgets/forma_ambient_backdrop.dart';
+import '../../../app/widgets/forma_theme_picker_dialog.dart';
 import '../../../app/theme/forma_theme.dart';
 import '../../settings/models/app_settings.dart';
 import '../../settings/screens/settings_screen.dart';
@@ -438,12 +441,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
       editorControllerProvider(widget.project).notifier,
     );
     final settings = ref.watch(settingsProvider);
-    final isGlass = settings.themeMode == FormaThemeMode.liquidGlass ||
-        settings.themeMode == FormaThemeMode.glassmorphism;
-    final isDark = settings.themeMode == FormaThemeMode.dark ||
-        settings.themeMode == FormaThemeMode.glassmorphism ||
-        (settings.themeMode == FormaThemeMode.system &&
-            Theme.of(context).brightness == Brightness.dark);
+    final isSystemDark = Theme.of(context).brightness == Brightness.dark;
+    final tokens = FormaTheme.tokensForMode(settings.themeMode, isSystemDark: isSystemDark);
+    final isGlass = tokens.isGlass;
+    final isDark = tokens.isDark;
 
     // If Prototype Player is active, display full interactive preview
     if (state.isPlayingPrototype) {
@@ -600,18 +601,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
     ),
   );
 
-    if (isGlass) {
-      return Container(
-        decoration: settings.themeMode == FormaThemeMode.glassmorphism
-            ? FormaTheme.glassmorphismCosmicGradient
-            : const BoxDecoration(
-                gradient: LiquidGlassTheme.liquidMeshGradient,
-              ),
-        child: content,
-      );
-    }
-
-    return content;
+    return FormaAmbientBackdrop(explicitTokens: tokens, child: content);
   }
 
   Widget _buildTopBar(
@@ -623,18 +613,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
     bool isGlass,
   ) {
     final settings = ref.watch(settingsProvider);
-    return Container(
+    final isSystemDark = Theme.of(context).brightness == Brightness.dark;
+    final tokens = FormaTheme.tokensForMode(settings.themeMode, isSystemDark: isSystemDark);
+
+    Widget barContent = Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: isGlass
-            ? Colors.white.withValues(alpha: 0.35)
-            : (isDark ? FormaColors.darkSurface : FormaColors.lightSurface),
+        color: tokens.surface,
         border: Border(
           bottom: BorderSide(
-            color: isGlass
-                ? Colors.white.withValues(alpha: 0.4)
-                : (isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+            color: tokens.border,
+            width: 1.0,
           ),
         ),
       ),
@@ -817,7 +807,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
             ),
             const SizedBox(width: 6),
 
-            // Theme Toggle Button (Quick Dark / Light mode toggle)
+            // Theme Toggle Button (Instant Light / Dark toggle)
             NeuIconButton(
               icon: isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
               size: 34,
@@ -832,6 +822,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                 final nextMode = isCurrentlyDark ? FormaThemeMode.light : FormaThemeMode.dark;
                 ref.read(settingsProvider.notifier).setThemeMode(nextMode);
               },
+            ),
+            const SizedBox(width: 6),
+
+            // Studio Themes Switcher Button (Direct access to all 4 themes including Liquid Glass & Cosmic)
+            NeuIconButton(
+              icon: Icons.palette_outlined,
+              size: 34,
+              iconSize: 16,
+              iconColor: tokens.accent,
+              tooltip: 'Studio Themes (Light, Dark, Liquid, Cosmic)',
+              onPressed: () => FormaThemePickerDialog.show(context),
             ),
             const SizedBox(width: 6),
 
@@ -852,7 +853,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                   Text(
                     'Export',
                     style: TextStyle(
-                      color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
+                      color: tokens.textMain,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
@@ -864,6 +865,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
         ),
       ),
     );
+
+    if (tokens.isGlass && tokens.cardBlur > 0) {
+      return ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: tokens.cardBlur, sigmaY: tokens.cardBlur),
+          child: barContent,
+        ),
+      );
+    }
+
+    return barContent;
   }
 
   Widget _buildPagesTabBar(
@@ -879,7 +891,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: isGlass
-            ? Colors.white.withValues(alpha: 0.15)
+            ? (isDark ? const Color(0x15FFFFFF) : const Color(0x40FFFFFF))
             : (isDark ? const Color(0xFF131822) : const Color(0xFFE2E8F0)),
         border: Border(
           bottom: BorderSide(
@@ -1087,7 +1099,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
         iconSize: iconSize,
         isActive: isActive,
         tooltip: tooltip,
-        onPressed: () => controller.setTool(tool),
+        onPressed: () {
+          if (tool == EditorTool.text && isActive) {
+            final id = controller.insertTextAtViewportCenter();
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              final n = controller.currentState.project.nodes[id];
+              if (n != null && mounted) {
+                CanvasViewport.showInPlaceTextEditor(context, n, controller);
+              }
+            });
+            controller.setTool(EditorTool.select);
+            return;
+          }
+          controller.setTool(tool);
+        },
       ),
     );
   }

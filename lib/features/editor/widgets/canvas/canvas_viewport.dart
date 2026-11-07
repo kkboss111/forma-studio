@@ -870,6 +870,7 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
       );
 
       if (isText) {
+        controller.setTool(EditorTool.select);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final createdNode = controller.currentState.project.nodes[createdId];
           if (createdNode != null && mounted) {
