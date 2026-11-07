@@ -458,6 +458,7 @@ class PropertiesPanel extends ConsumerWidget {
     EditorController controller,
     bool isDark,
   ) {
+    final tokens = FormaTheme.tokensOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -467,9 +468,9 @@ class PropertiesPanel extends ConsumerWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
+            color: tokens.wellBg,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+            border: Border.all(color: tokens.borderSubtle),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -503,9 +504,9 @@ class PropertiesPanel extends ConsumerWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
+            color: tokens.wellBg,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+            border: Border.all(color: tokens.borderSubtle),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -545,9 +546,9 @@ class PropertiesPanel extends ConsumerWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
+            color: tokens.wellBg,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+            border: Border.all(color: tokens.borderSubtle),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1496,10 +1497,10 @@ class PropertiesPanel extends ConsumerWidget {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
+                color: FormaTheme.tokensOf(context).wellBg,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+                  color: FormaTheme.tokensOf(context).borderSubtle,
                 ),
               ),
               child: Column(

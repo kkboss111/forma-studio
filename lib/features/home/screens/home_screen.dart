@@ -1670,52 +1670,86 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  // --- PERMANENT "NEW DESIGN" CARD (Image 2) ---
+  // --- PERMANENT "NEW DESIGN" CARD ---
   Widget _buildNewDesignCard(
     BuildContext context,
     bool isDark,
     bool isGlass,
     AppSettings settings,
   ) {
+    final tokens = FormaTheme.tokensOf(context);
+
     final content = InkWell(
       onTap: _createBlankProject,
       borderRadius: BorderRadius.circular(18),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: FormaColors.primaryBlue.withValues(alpha: 0.15),
-            ),
-            child: const Icon(
-              Icons.add_rounded,
-              size: 32,
-              color: FormaColors.primaryBlue,
-            ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: tokens.accent.withValues(alpha: isDark ? 0.35 : 0.28),
+            width: 1.5,
           ),
-          const SizedBox(height: 10),
-          Text(
-            'New Design',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : FormaColors.lightTextMain,
-            ),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? [
+                    tokens.accent.withValues(alpha: 0.08),
+                    tokens.accent.withValues(alpha: 0.02),
+                  ]
+                : [
+                    tokens.accent.withValues(alpha: 0.06),
+                    tokens.accent.withValues(alpha: 0.01),
+                  ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            'Create blank artboard',
-            style: TextStyle(
-              fontSize: 10,
-              color: isDark
-                  ? FormaColors.darkTextMuted
-                  : FormaColors.lightTextMuted,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [tokens.accent, tokens.accent.withValues(alpha: 0.75)],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: tokens.accent.withValues(alpha: 0.35),
+                    offset: const Offset(0, 4),
+                    blurRadius: 14,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.add_rounded,
+                size: 30,
+                color: Colors.white,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Text(
+              'New Design',
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : FormaColors.lightTextMain,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              'Create blank artboard',
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
+                color: isDark
+                    ? FormaColors.darkTextMuted
+                    : FormaColors.lightTextMuted,
+              ),
+            ),
+          ],
+        ),
       ),
     );
 
@@ -1745,6 +1779,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   ) {
     final dateFormat = DateFormat('MMM d • h:mm a');
     final isSelected = _selectedProjectIds.contains(project.id);
+    final firstPageBg = project.pages.isNotEmpty
+        ? project.pages.first.backgroundColor
+        : Colors.white;
 
     final cardContent = InkWell(
       onTap: () {
@@ -1766,23 +1803,131 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Preview Thumbnail Well with optional selection checkbox
+            // Preview Miniature Artboard Well
             Expanded(
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: NeuWell(
-                      radius: 12,
-                      padding: EdgeInsets.zero,
-                      child: Center(
-                        child: Icon(
-                          Icons.draw_rounded,
-                          size: 32,
-                          color: FormaColors.primaryBlue.withValues(alpha: 0.7),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: firstPageBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : Colors.black.withValues(alpha: 0.08),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            offset: const Offset(0, 2),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            CustomPaint(
+                              size: Size.infinite,
+                              painter: _MiniArtboardGridPainter(isDark: isDark),
+                            ),
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.draw_rounded,
+                                  size: 28,
+                                  color: FormaColors.primaryBlue.withValues(alpha: 0.8),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  project.nodes.isEmpty
+                                      ? 'Blank Artboard'
+                                      : '${project.nodes.length} Elements',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: (firstPageBg.computeLuminance() > 0.5)
+                                        ? Colors.black54
+                                        : Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ),
+
+                  // Top-Left: Layer Count Pill
+                  Positioned(
+                    top: 6,
+                    left: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.white24, width: 0.5),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.layers_rounded, size: 10, color: Colors.white70),
+                          const SizedBox(width: 3),
+                          Text(
+                            '${project.nodes.length} ${project.nodes.length == 1 ? "layer" : "layers"}',
+                            style: const TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Top-Right: Direct 1-Click Favorite Toggle
+                  if (!_isBulkSelectMode)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: InkWell(
+                        onTap: () => _toggleFavorite(project),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: project.isFavorite
+                                ? Colors.pinkAccent.withValues(alpha: 0.25)
+                                : Colors.black.withValues(alpha: 0.45),
+                            border: Border.all(
+                              color: project.isFavorite
+                                  ? Colors.pinkAccent.withValues(alpha: 0.7)
+                                  : Colors.white24,
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Icon(
+                            project.isFavorite
+                                ? Icons.favorite_rounded
+                                : Icons.favorite_border_rounded,
+                            size: 13,
+                            color: project.isFavorite
+                                ? Colors.pinkAccent
+                                : Colors.white70,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // Bulk selection checkbox
                   if (_isBulkSelectMode)
                     Positioned(
                       top: 4,
@@ -1808,7 +1953,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             const SizedBox(height: 8),
 
-            // Project Title & Options
+            // Project Title & Options Row
             Row(
               children: [
                 Expanded(
@@ -1817,7 +1962,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w700,
                       color: isDark
                           ? FormaColors.darkTextMain
@@ -1861,7 +2006,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       }
                     },
                     itemBuilder: (ctx) => [
-                      // 1. Favorite Toggle
                       PopupMenuItem(
                         value: 'favorite',
                         child: Row(
@@ -1878,7 +2022,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ],
                         ),
                       ),
-                      // 2. Properties (Rename & Info)
                       const PopupMenuItem(
                         value: 'properties',
                         child: Row(
@@ -1889,7 +2032,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ],
                         ),
                       ),
-                      // 2. Duplicate
                       const PopupMenuItem(
                         value: 'duplicate',
                         child: Row(
@@ -1900,18 +2042,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ],
                         ),
                       ),
-                      // 3. Quick Export
                       const PopupMenuItem(
                         value: 'export',
                         child: Row(
                           children: [
-                            Icon(Icons.file_upload_outlined, size: 16),
+                            Icon(Icons.download_rounded, size: 16),
                             SizedBox(width: 8),
                             Text('Export'),
                           ],
                         ),
                       ),
-                      // 4. Share
                       const PopupMenuItem(
                         value: 'share',
                         child: Row(
@@ -1922,7 +2062,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ],
                         ),
                       ),
-                      // 5. Delete
                       const PopupMenuItem(
                         value: 'delete',
                         child: Row(
@@ -1938,15 +2077,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ],
             ),
 
-            // Updated date
-            Text(
-              dateFormat.format(project.updatedAt),
-              style: TextStyle(
-                fontSize: 9.5,
-                color: isDark
-                    ? FormaColors.darkTextMuted
-                    : FormaColors.lightTextMuted,
-              ),
+            const SizedBox(height: 2),
+
+            // Metadata: Clock Icon + Formatted Date + Multi-Page Count
+            Row(
+              children: [
+                Icon(
+                  Icons.access_time_rounded,
+                  size: 11,
+                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  dateFormat.format(project.updatedAt),
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w500,
+                    color: isDark
+                        ? FormaColors.darkTextMuted
+                        : FormaColors.lightTextMuted,
+                  ),
+                ),
+                const Spacer(),
+                if (project.pages.length > 1)
+                  Text(
+                    '${project.pages.length} pages',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: FormaColors.primaryBlue,
+                    ),
+                  ),
+              ],
             ),
           ],
         ),
@@ -2388,4 +2550,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
   }
+}
+
+class _MiniArtboardGridPainter extends CustomPainter {
+  final bool isDark;
+  const _MiniArtboardGridPainter({required this.isDark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04)
+      ..strokeWidth = 1.0;
+    const step = 16.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MiniArtboardGridPainter oldDelegate) =>
+      oldDelegate.isDark != isDark;
 }
