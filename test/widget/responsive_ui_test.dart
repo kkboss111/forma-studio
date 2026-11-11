@@ -314,74 +314,17 @@ void main() {
       expect(find.text('Forma Obsidian Dark'), findsOneWidget);
     });
 
-    testWidgets('3. Liquid Glass Theme: visionOS blur, specular rim & frosted translucency', (tester) async {
-      final tokens = FormaTheme.liquidGlassTokens;
-      expect(tokens.mode, FormaThemeMode.liquidGlass);
-      expect(tokens.isGlass, isTrue);
-      expect(tokens.cardBlur, greaterThan(0.0));
-      expect(tokens.specularRim, isNotNull);
+    testWidgets('3. System Theme: Resolves dynamically to light or dark mode', (tester) async {
+      final lightTokens = FormaTheme.tokensForMode(FormaThemeMode.system, isSystemDark: false);
+      expect(lightTokens.isDark, isFalse);
+      expect(lightTokens.mode, FormaThemeMode.light);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: FormaTheme.liquidGlass(),
-          home: Scaffold(
-            body: Builder(
-              builder: (context) {
-                final resolved = FormaTheme.tokensOf(context);
-                expect(resolved.isGlass, isTrue);
-                expect(resolved.mode, FormaThemeMode.liquidGlass);
-                return Container(
-                  color: resolved.surface,
-                  child: Text(
-                    'Forma Liquid Glass',
-                    style: TextStyle(color: resolved.textMain),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      );
-
-      expect(tester.takeException(), isNull);
-      expect(find.text('Forma Liquid Glass'), findsOneWidget);
+      final darkTokens = FormaTheme.tokensForMode(FormaThemeMode.system, isSystemDark: true);
+      expect(darkTokens.isDark, isTrue);
+      expect(darkTokens.mode, FormaThemeMode.dark);
     });
 
-    testWidgets('4. Cosmic Glassmorphism Theme: Deep nebula space & starlight luminescence', (tester) async {
-      final tokens = FormaTheme.glassmorphismTokens;
-      expect(tokens.mode, FormaThemeMode.glassmorphism);
-      expect(tokens.isDark, isTrue);
-      expect(tokens.isGlass, isTrue);
-      expect(tokens.cardBlur, greaterThan(0.0));
-
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: FormaTheme.glassmorphism(),
-          home: Scaffold(
-            body: Builder(
-              builder: (context) {
-                final resolved = FormaTheme.tokensOf(context);
-                expect(resolved.isGlass, isTrue);
-                expect(resolved.isDark, isTrue);
-                expect(resolved.mode, FormaThemeMode.glassmorphism);
-                return Container(
-                  color: resolved.surface,
-                  child: Text(
-                    'Forma Cosmic Nebula',
-                    style: TextStyle(color: resolved.textMain),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      );
-
-      expect(tester.takeException(), isNull);
-      expect(find.text('Forma Cosmic Nebula'), findsOneWidget);
-    });
-
-    testWidgets('Dynamic theme switching across all 4 modes updates state and UI cleanly', (tester) async {
+    testWidgets('Dynamic theme switching across System, Light, and Dark updates state and UI cleanly', (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
@@ -394,8 +337,6 @@ void main() {
               final activeTheme = switch (settings.themeMode) {
                 FormaThemeMode.light => FormaTheme.light(),
                 FormaThemeMode.dark => FormaTheme.dark(),
-                FormaThemeMode.liquidGlass => FormaTheme.liquidGlass(),
-                FormaThemeMode.glassmorphism => FormaTheme.glassmorphism(),
                 FormaThemeMode.system => FormaTheme.light(),
               };
 
@@ -415,10 +356,9 @@ void main() {
       await tester.pumpAndSettle();
 
       for (final mode in [
+        FormaThemeMode.system,
         FormaThemeMode.light,
         FormaThemeMode.dark,
-        FormaThemeMode.liquidGlass,
-        FormaThemeMode.glassmorphism,
       ]) {
         container.read(settingsProvider.notifier).setThemeMode(mode);
         await tester.pumpAndSettle();

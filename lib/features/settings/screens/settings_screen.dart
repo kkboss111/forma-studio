@@ -93,127 +93,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     SettingsNotifier notifier,
   ) async {
     if (mode == settings.themeMode) return;
-
-    if (mode == FormaThemeMode.liquidGlass) {
-      final pin = await _showPasscodeDialog(
-        context,
-        'Liquid Glass Passcode',
-        'Liquid Glass Mode',
-      );
-      if (pin == '1111') {
-        notifier.setThemeMode(FormaThemeMode.liquidGlass);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Passcode verified! Liquid Glass Mode activated.'),
-              backgroundColor: FormaColors.successGreen,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      } else if (pin != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Incorrect passcode. Please enter the valid security PIN.'),
-              backgroundColor: FormaColors.dangerRed,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    } else if (mode == FormaThemeMode.glassmorphism) {
-      notifier.setThemeMode(FormaThemeMode.glassmorphism);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Glassmorphism Cosmic Theme activated! ✨'),
-            backgroundColor: FormaColors.primaryBlue,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } else {
-      notifier.setThemeMode(mode);
-    }
-  }
-
-  Future<String?> _showPasscodeDialog(
-    BuildContext context,
-    String title,
-    String targetMode,
-  ) async {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            const Icon(Icons.lock_outline_rounded, color: FormaColors.primaryBlue),
-            const SizedBox(width: 8),
-            Text(title, style: const TextStyle(fontSize: 16)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Enter the 4-digit security PIN to activate $targetMode:',
-              style: const TextStyle(fontSize: 12.5),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              obscureText: true,
-              maxLength: 4,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 22,
-                letterSpacing: 8,
-                fontWeight: FontWeight.bold,
-              ),
-              decoration: InputDecoration(
-                counterText: '',
-                hintText: '••••',
-                filled: true,
-                fillColor: Colors.black.withValues(alpha: 0.05),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-              onSubmitted: (val) => Navigator.of(ctx).pop(val),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: FormaColors.primaryBlue,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () => Navigator.of(ctx).pop(controller.text),
-            child: const Text(
-              'Verify PIN',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    notifier.setThemeMode(mode);
   }
 
   Future<void> _exportFullBackup() async {
@@ -687,16 +567,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     desc = 'Obsidian palette with deep slate tones';
                     icon = Icons.dark_mode_rounded;
                     break;
-                  case FormaThemeMode.liquidGlass:
-                    label = 'Liquid Glass';
-                    desc = 'Real-time backdrop blur & specular sheen';
-                    icon = Icons.blur_on_rounded;
-                    break;
-                  case FormaThemeMode.glassmorphism:
-                    label = 'Glassmorphism (CSS Showcase)';
-                    desc = 'Dynamic cosmic blur gradients & glow accents';
-                    icon = Icons.auto_awesome_rounded;
-                    break;
                 }
 
                 return Padding(
@@ -783,48 +653,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
         ),
-        if (settings.themeMode == FormaThemeMode.liquidGlass)
-          _buildConfigCard(
-            title: 'Liquid Glass Shader Parameters',
-            subtitle: 'Tune dynamic optical refraction, blur, and specular light highlights',
-            icon: Icons.blur_on_rounded,
-            isDark: isDark,
-            isGlass: isGlass,
-            children: [
-              _buildSliderRow(
-                label: 'Backdrop Blur Strength',
-                value: settings.glassBlur,
-                min: 5.0,
-                max: 60.0,
-                unit: 'px',
-                onChanged: notifier.setGlassBlur,
-                isDark: isDark,
-              ),
-              _buildSliderRow(
-                label: 'Glass Panel Opacity',
-                value: settings.glassOpacity * 100,
-                min: 15.0,
-                max: 85.0,
-                unit: '%',
-                onChanged: (val) => notifier.setGlassOpacity(val / 100),
-                isDark: isDark,
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Specular Light Highlight'),
-                subtitle: const Text('Luminous top-edge reflection simulation'),
-                value: settings.glassSpecular,
-                onChanged: notifier.toggleGlassSpecular,
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Fluid Sheen Animation'),
-                subtitle: const Text('Soft angled ambient highlight overlay'),
-                value: settings.glassSheen,
-                onChanged: notifier.toggleGlassSheen,
-              ),
-            ],
-          ),
         _buildConfigCard(
           title: 'Sidebar & Tool Dock Position',
           subtitle: 'Keep primary sidebar on Left or Right. Navigation snaps appropriately.',

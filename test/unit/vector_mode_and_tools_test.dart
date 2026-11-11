@@ -140,20 +140,22 @@ void main() {
   });
 
   group('Theme Modes & Extended Zoom Tests', () {
-    test('FormaThemeMode has glassmorphism enum', () {
-      expect(FormaThemeMode.glassmorphism, isNotNull);
-      expect(FormaThemeMode.values.contains(FormaThemeMode.glassmorphism), isTrue);
+    test('FormaThemeMode has system, light, and dark enums', () {
+      expect(FormaThemeMode.values, contains(FormaThemeMode.system));
+      expect(FormaThemeMode.values, contains(FormaThemeMode.light));
+      expect(FormaThemeMode.values, contains(FormaThemeMode.dark));
+      expect(FormaThemeMode.values.length, 3);
     });
 
-    test('AppSettings serializes and restores glassmorphism and extendedZoomLimit', () {
-      const settingsGlass = AppSettings(
-        themeMode: FormaThemeMode.glassmorphism,
+    test('AppSettings serializes and restores dark theme and extendedZoomLimit', () {
+      const settingsDark = AppSettings(
+        themeMode: FormaThemeMode.dark,
         extendedZoomLimit: true,
       );
-      final jsonGlass = settingsGlass.toJson();
-      final restoredGlass = AppSettings.fromJson(jsonGlass);
-      expect(restoredGlass.themeMode, FormaThemeMode.glassmorphism);
-      expect(restoredGlass.extendedZoomLimit, isTrue);
+      final jsonDark = settingsDark.toJson();
+      final restoredDark = AppSettings.fromJson(jsonDark);
+      expect(restoredDark.themeMode, FormaThemeMode.dark);
+      expect(restoredDark.extendedZoomLimit, isTrue);
     });
   });
 }

@@ -7,10 +7,11 @@ import '../../../../app/theme/forma_theme.dart';
 import '../../../../app/theme/neumorphic.dart';
 import '../../../../core/collab/collab_models.dart';
 import '../../../../core/collab/collab_service.dart';
+import '../panels/room_operator_menu.dart';
 
 /// Modal dialog for managing real-time multi-user design sessions in Forma Studio.
-/// Supports hosting new rooms, joining existing rooms with 6-character room codes,
-/// copying room codes, tracking active collaborators, and toggling remote live cursors.
+/// Features instant 1-click room hosting, quick join, 6-character room code sharing,
+/// active collaborator indicators, remote cursor toggles, and Room Operator menu access.
 class CollabDialog extends ConsumerStatefulWidget {
   final CollabService? collabService;
 
@@ -26,10 +27,13 @@ class CollabDialog extends ConsumerStatefulWidget {
 class _CollabDialogState extends ConsumerState<CollabDialog>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final TextEditingController _createRoomNameCtrl = TextEditingController(text: 'Design Studio Session');
-  final TextEditingController _createUserNameCtrl = TextEditingController(text: 'Lead Designer');
+  final TextEditingController _createRoomNameCtrl =
+      TextEditingController(text: 'Design Studio Session');
+  final TextEditingController _createUserNameCtrl =
+      TextEditingController(text: 'Lead Designer');
   final TextEditingController _joinRoomCodeCtrl = TextEditingController();
-  final TextEditingController _joinUserNameCtrl = TextEditingController(text: 'Peer Designer');
+  final TextEditingController _joinUserNameCtrl =
+      TextEditingController(text: 'Peer Designer');
 
   late Color _selectedColor;
   bool _copied = false;
@@ -61,7 +65,7 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
         : ref.read(collabServiceProvider);
   }
 
-  Future<void> _handleCreateRoom() async {
+  Future<void> _handleQuickHost() async {
     final service = _resolveService();
     setState(() {
       _isActionInProgress = true;
@@ -69,19 +73,35 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
     });
 
     try {
-      await service.createRoom(
-        _createRoomNameCtrl.text,
+      final session = await service.quickHostRoom(
+        roomName: _createRoomNameCtrl.text,
         userName: _createUserNameCtrl.text,
         color: _selectedColor,
       );
+
+      // Automatically copy 6-character code to clipboard
+      await Clipboard.setData(ClipboardData(text: session.roomId));
+
       if (mounted) {
-        setState(() => _isActionInProgress = false);
+        setState(() {
+          _isActionInProgress = false;
+          _copied = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Room ${session.roomId} created! Code copied. Share it with your friend to draw together!',
+            ),
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _isActionInProgress = false;
-          _statusError = 'Error creating room: $e';
+          _statusError = 'Error hosting room: $e';
         });
       }
     }
@@ -90,7 +110,7 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
   Future<void> _handleJoinRoom(String roomCode) async {
     final cleanCode = roomCode.trim().toUpperCase();
     if (cleanCode.isEmpty) {
-      setState(() => _statusError = 'Please enter a valid room code');
+      setState(() => _statusError = 'Please enter a valid 6-character room code');
       return;
     }
 
@@ -153,7 +173,7 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
     final isConnected = service.isConnected && session != null;
     final tokens = FormaTheme.tokensOf(context);
     final screenSize = MediaQuery.of(context).size;
-    final dialogWidth = math.min(screenSize.width - 32, 520.0);
+    final dialogWidth = math.min(screenSize.width - 32, 540.0);
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -164,7 +184,7 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
         padding: const EdgeInsets.all(22),
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: screenSize.height * 0.86,
+            maxHeight: screenSize.height * 0.88,
           ),
           child: SingleChildScrollView(
             child: Column(
@@ -332,7 +352,7 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
   }
 
   // ===========================================================================
-  // Disconnected View: Tabs for Create & Join
+  // Disconnected View: Instant 1-Click Host, Quick Join, and Options
   // ===========================================================================
   Widget _buildDisconnectedView(FormaThemeTokens tokens) {
     return Column(
@@ -367,8 +387,8 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
             unselectedLabelStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
             dividerHeight: 0,
             tabs: const [
-              Tab(text: 'Create Session'),
-              Tab(text: 'Join Session'),
+              Tab(text: 'Quick Start'),
+              Tab(text: 'Custom Setup'),
             ],
           ),
         ),
@@ -378,8 +398,8 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
           child: TabBarView(
             controller: _tabController,
             children: [
-              _buildCreateTab(tokens),
-              _buildJoinTab(tokens),
+              _buildInstantOnboardingTab(tokens),
+              _buildCustomSetupTab(tokens),
             ],
           ),
         ),
@@ -387,124 +407,227 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
     );
   }
 
-  Widget _buildCreateTab(FormaThemeTokens tokens) {
+  /// Fast, instant, fool-proof onboarding tab
+  Widget _buildInstantOnboardingTab(FormaThemeTokens tokens) {
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildInputLabel(tokens, 'Session / Room Name'),
-          NeuTextField(
-            controller: _createRoomNameCtrl,
-            hintText: 'e.g. Mobile Design System Sprint',
-            prefixIcon: Icon(Icons.meeting_room_outlined, size: 18, color: tokens.textMuted),
-          ),
-          const SizedBox(height: 14),
-          _buildInputLabel(tokens, 'Your Designer Name'),
-          NeuTextField(
-            controller: _createUserNameCtrl,
-            hintText: 'e.g. Alex Rivera',
-            prefixIcon: Icon(Icons.person_outline_rounded, size: 18, color: tokens.textMuted),
-          ),
-          const SizedBox(height: 14),
-          _buildInputLabel(tokens, 'Cursor & Badge Color'),
-          _buildColorPickerRow(tokens),
-          const SizedBox(height: 16),
-          // Feature summary pills
-          _buildFeaturesRow(tokens),
-          const SizedBox(height: 20),
-          NeuButton(
-            height: 44,
-            onPressed: _isActionInProgress ? null : _handleCreateRoom,
-            color: FormaColors.primaryBlue,
-            child: _isActionInProgress
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
-                : const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.wifi_tethering_rounded, size: 18, color: Colors.white),
-                      SizedBox(width: 8),
-                      Text(
-                        'Launch Realtime Room',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
+          // 1-Click Host Hero Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF2563EB).withValues(alpha: tokens.isDark ? 0.25 : 0.10),
+                  const Color(0xFF7C3AED).withValues(alpha: tokens.isDark ? 0.25 : 0.08),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: FormaColors.primaryBlue.withValues(alpha: 0.35),
+                width: 1.2,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: FormaColors.primaryBlue.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                    ],
-                  ),
+                      child: const Icon(
+                        Icons.bolt_rounded,
+                        color: FormaColors.primaryBlue,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Host a Live Room in 1 Click',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: tokens.textMain,
+                            ),
+                          ),
+                          Text(
+                            'Instantly generates a 6-letter room code and copies it to share.',
+                            style: TextStyle(fontSize: 11.5, color: tokens.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                NeuButton(
+                  height: 46,
+                  onPressed: _isActionInProgress ? null : _handleQuickHost,
+                  color: FormaColors.primaryBlue,
+                  child: _isActionInProgress
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.wifi_tethering_rounded, size: 20, color: Colors.white),
+                            SizedBox(width: 8),
+                            Text(
+                              'Start Live Room Now',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(height: 16),
+
+          // Divider
+          Row(
+            children: [
+              Expanded(child: Divider(color: tokens.borderSubtle)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Text(
+                  'OR JOIN A FRIEND\'S ROOM',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: tokens.textMuted,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+              Expanded(child: Divider(color: tokens.borderSubtle)),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Room Code Input & Join Button
+          _buildInputLabel(tokens, 'Enter 6-Letter Room Code'),
+          Row(
+            children: [
+              Expanded(
+                child: NeuTextField(
+                  controller: _joinRoomCodeCtrl,
+                  hintText: 'e.g. FORMA-8392 or A9X2',
+                  prefixIcon: const Icon(
+                    Icons.pin_rounded,
+                    size: 18,
+                    color: FormaColors.primaryBlue,
+                  ),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.paste_rounded, size: 17),
+                    tooltip: 'Paste from clipboard',
+                    onPressed: () async {
+                      final data = await Clipboard.getData(Clipboard.kTextPlain);
+                      if (data?.text != null) {
+                        _joinRoomCodeCtrl.text = data!.text!.trim().toUpperCase();
+                      }
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              NeuButton(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                onPressed: _isActionInProgress
+                    ? null
+                    : () => _handleJoinRoom(_joinRoomCodeCtrl.text),
+                color: FormaColors.primaryBlue,
+                child: _isActionInProgress
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Row(
+                        children: [
+                          Icon(Icons.login_rounded, size: 18, color: Colors.white),
+                          SizedBox(width: 6),
+                          Text(
+                            'Join',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Quick LAN Join Pills
+          _buildRecentRoomsList(tokens),
         ],
       ),
     );
   }
 
-  Widget _buildJoinTab(FormaThemeTokens tokens) {
+  /// Custom settings tab (display name, custom room title, cursor color)
+  Widget _buildCustomSetupTab(FormaThemeTokens tokens) {
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildInputLabel(tokens, '6-Character Room Code'),
+          _buildInputLabel(tokens, 'Custom Room Name'),
           NeuTextField(
-            controller: _joinRoomCodeCtrl,
-            hintText: 'FORMA-8392 or A9X2',
-            prefixIcon: const Icon(Icons.pin_rounded, size: 18, color: FormaColors.primaryBlue),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.paste_rounded, size: 17),
-              tooltip: 'Paste from clipboard',
-              onPressed: () async {
-                final data = await Clipboard.getData(Clipboard.kTextPlain);
-                if (data?.text != null) {
-                  _joinRoomCodeCtrl.text = data!.text!.trim().toUpperCase();
-                }
-              },
-            ),
+            controller: _createRoomNameCtrl,
+            hintText: 'e.g. Mobile Design System Sprint',
+            prefixIcon: Icon(Icons.meeting_room_outlined, size: 18, color: tokens.textMuted),
           ),
-          const SizedBox(height: 14),
-          _buildInputLabel(tokens, 'Your Designer Name'),
+          const SizedBox(height: 12),
+          _buildInputLabel(tokens, 'Your Display Name'),
           NeuTextField(
-            controller: _joinUserNameCtrl,
-            hintText: 'e.g. Jordan Lee',
+            controller: _createUserNameCtrl,
+            hintText: 'e.g. Alex Rivera',
             prefixIcon: Icon(Icons.person_outline_rounded, size: 18, color: tokens.textMuted),
           ),
-          const SizedBox(height: 14),
-          _buildInputLabel(tokens, 'Cursor & Badge Color'),
+          const SizedBox(height: 12),
+          _buildInputLabel(tokens, 'Your Live Cursor & Badge Color'),
           _buildColorPickerRow(tokens),
+          const SizedBox(height: 14),
+          _buildFeaturesRow(tokens),
           const SizedBox(height: 16),
-          // Discovered / Recent LAN Rooms
-          _buildRecentRoomsList(tokens),
-          const SizedBox(height: 20),
           NeuButton(
             height: 44,
-            onPressed: _isActionInProgress
-                ? null
-                : () => _handleJoinRoom(_joinRoomCodeCtrl.text),
+            onPressed: _isActionInProgress ? null : _handleQuickHost,
             color: FormaColors.primaryBlue,
-            child: _isActionInProgress
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
-                : const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.login_rounded, size: 18, color: Colors.white),
-                      SizedBox(width: 8),
-                      Text(
-                        'Join Live Session',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.check_circle_outline_rounded, size: 18, color: Colors.white),
+                SizedBox(width: 8),
+                Text(
+                  'Launch Custom Session',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -652,7 +775,7 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
   }
 
   // ===========================================================================
-  // Connected View: Room Code with 1-click Copy, Participants, Cursors Toggle
+  // Connected View: Room Code with 1-click Copy, Participants, Operator Button
   // ===========================================================================
   Widget _buildConnectedView(
     FormaThemeTokens tokens,
@@ -675,62 +798,96 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
               width: 1.2,
             ),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'ROOM CODE',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: tokens.textMuted,
-                        letterSpacing: 1.0,
-                      ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'SHARE THIS 6-LETTER CODE WITH YOUR FRIEND',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: tokens.textMuted,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          session.roomId,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: FormaColors.primaryBlue,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${session.roomName} • ${service.adapterName}',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: tokens.textMuted,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      session.roomId,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: FormaColors.primaryBlue,
-                        letterSpacing: 1.5,
-                      ),
+                  ),
+                  NeuButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                    onPressed: () => _copyRoomCode(session.roomId),
+                    color: _copied ? FormaColors.successGreen : tokens.surface,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _copied ? Icons.check_rounded : Icons.copy_rounded,
+                          size: 16,
+                          color: _copied ? Colors.white : tokens.textMain,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _copied ? 'Copied' : 'Copy Code',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: _copied ? Colors.white : tokens.textMain,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${session.roomName} • ${service.adapterName}',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: tokens.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 10),
+              // Dedicated Button to Open Room Operator Menu
               NeuButton(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                onPressed: () => _copyRoomCode(session.roomId),
-                color: _copied ? FormaColors.successGreen : tokens.surface,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  showRoomOperatorMenu(context, collabService: service);
+                },
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.14),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      _copied ? Icons.check_rounded : Icons.copy_rounded,
+                      Icons.admin_panel_settings_rounded,
                       size: 16,
-                      color: _copied ? Colors.white : tokens.textMain,
+                      color: Color(0xFFD97706),
                     ),
-                    const SizedBox(width: 6),
+                    SizedBox(width: 8),
                     Text(
-                      _copied ? 'Copied' : 'Copy Code',
+                      'Open Room Operator Menu (Host Controls)',
                       style: TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w700,
-                        color: _copied ? Colors.white : tokens.textMain,
+                        color: Color(0xFFD97706),
                       ),
                     ),
                   ],
@@ -739,7 +896,7 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
             ],
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
 
         // Active Participants List
         Row(
@@ -754,7 +911,7 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
               ),
             ),
             Text(
-              'Realtime Presence',
+              '${service.pingMs}ms latency',
               style: TextStyle(
                 fontSize: 11,
                 color: tokens.textMuted,
@@ -766,7 +923,7 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
 
         // Participants Cards
         Container(
-          constraints: const BoxConstraints(maxHeight: 180),
+          constraints: const BoxConstraints(maxHeight: 160),
           decoration: BoxDecoration(
             color: tokens.wellBg,
             borderRadius: BorderRadius.circular(14),
@@ -880,9 +1037,9 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
                                 color: tokens.textMuted,
                               ),
                             )
-                          else if (p.statusMessage != null)
+                          else
                             Text(
-                              p.statusMessage!,
+                              p.canEdit ? 'Can edit canvas' : 'View only',
                               style: TextStyle(
                                 fontSize: 10.5,
                                 color: tokens.textMuted,
@@ -906,7 +1063,7 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
             },
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
         // Remote Cursors Toggle Tile
         Container(
@@ -962,21 +1119,21 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
 
         // Disconnect Button
         NeuButton(
           height: 44,
           onPressed: _isActionInProgress ? null : _handleDisconnect,
           color: FormaColors.dangerRed.withValues(alpha: 0.12),
-          child: Row(
+          child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.link_off_rounded, size: 18, color: FormaColors.dangerRed),
-              const SizedBox(width: 8),
+              Icon(Icons.link_off_rounded, size: 18, color: FormaColors.dangerRed),
+              SizedBox(width: 8),
               Text(
                 'Disconnect / Leave Session',
-                style: const TextStyle(
+                style: TextStyle(
                   color: FormaColors.dangerRed,
                   fontWeight: FontWeight.w700,
                   fontSize: 13.5,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../theme/forma_theme.dart';
-import '../../features/settings/models/app_settings.dart';
 
 /// Immersive ambient backdrop that paints rich nebula gradients and glowing orbs
 /// behind frosted glass surfaces (Liquid Glass & Cosmic Glassmorphism).
@@ -18,7 +17,7 @@ class FormaAmbientBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = explicitTokens ?? FormaTheme.tokensOf(context);
 
-    if (tokens.mode == FormaThemeMode.glassmorphism) {
+    if (tokens.isGlass && tokens.isDark) {
       return Stack(
         fit: StackFit.expand,
         children: [
@@ -89,7 +88,7 @@ class FormaAmbientBackdrop extends StatelessWidget {
       );
     }
 
-    if (tokens.mode == FormaThemeMode.liquidGlass) {
+    if (tokens.isGlass && !tokens.isDark) {
       return Stack(
         fit: StackFit.expand,
         children: [

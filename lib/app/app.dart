@@ -26,19 +26,10 @@ class FormaApp extends ConsumerWidget {
       case FormaThemeMode.dark:
         mode = ThemeMode.dark;
         break;
-      case FormaThemeMode.liquidGlass:
-        mode = ThemeMode.light;
-        activeLightTheme = FormaTheme.liquidGlass();
-        break;
-      case FormaThemeMode.glassmorphism:
-        mode = ThemeMode.dark;
-        activeDarkTheme = FormaTheme.glassmorphism();
-        break;
     }
 
     final isSystemDark = View.of(context).platformDispatcher.platformBrightness == Brightness.dark;
     final isDark = settings.themeMode == FormaThemeMode.dark ||
-        settings.themeMode == FormaThemeMode.glassmorphism ||
         (settings.themeMode == FormaThemeMode.system && isSystemDark);
 
     return MaterialApp(
@@ -52,10 +43,8 @@ class FormaApp extends ConsumerWidget {
           final cur = ref.read(settingsProvider);
           final nextMode = switch (cur.themeMode) {
             FormaThemeMode.light => FormaThemeMode.dark,
-            FormaThemeMode.dark => FormaThemeMode.liquidGlass,
-            FormaThemeMode.liquidGlass => FormaThemeMode.glassmorphism,
-            FormaThemeMode.glassmorphism => FormaThemeMode.light,
-            FormaThemeMode.system => FormaThemeMode.dark,
+            FormaThemeMode.dark => FormaThemeMode.light,
+            FormaThemeMode.system => isSystemDark ? FormaThemeMode.light : FormaThemeMode.dark,
           };
           notifier.setThemeMode(nextMode);
         },

@@ -147,11 +147,11 @@ void main() {
       expect(settings.glassBlur, 32.0);
       expect(settings.glassSpecular, isTrue);
 
-      final customSettings = settings.copyWith(themeMode: FormaThemeMode.liquidGlass);
+      final customSettings = settings.copyWith(themeMode: FormaThemeMode.dark);
       final json = customSettings.toJson();
       final restored = AppSettings.fromJson(json);
 
-      expect(restored.themeMode, FormaThemeMode.liquidGlass);
+      expect(restored.themeMode, FormaThemeMode.dark);
       expect(restored.glassBlur, 32.0);
       expect(restored.glassSpecular, isTrue);
       expect(restored.enableHtmlCodeExport, isFalse);

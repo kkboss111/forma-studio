@@ -7,8 +7,6 @@ enum FormaThemeMode {
   system,
   light,
   dark,
-  liquidGlass,
-  glassmorphism,
 }
 
 enum SidebarSide {

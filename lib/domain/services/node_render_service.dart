@@ -52,11 +52,16 @@ class NodeRenderService {
         canvas.clipPath(path);
         canvas.saveLayer(
           rect.inflate(eff.blurRadius),
-          Paint()..imageFilter = ui.ImageFilter.blur(
-            sigmaX: eff.blurRadius,
-            sigmaY: eff.blurRadius,
-          ),
+          Paint()
+            ..imageFilter = ui.ImageFilter.blur(
+              sigmaX: eff.blurRadius,
+              sigmaY: eff.blurRadius,
+            ),
         );
+        final frostedColor = eff.color != Colors.transparent && eff.color.a > 0
+            ? eff.color
+            : Colors.white.withValues(alpha: 0.08);
+        canvas.drawRect(rect, Paint()..color = frostedColor);
         canvas.restore();
         canvas.restore();
       }
@@ -66,17 +71,19 @@ class NodeRenderService {
     for (final eff in node.effects) {
       if (!eff.isVisible) continue;
       if (eff.type == DesignEffectType.dropShadow) {
-        final shadowPaint = Paint()
-          ..color = eff.color
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, eff.blurRadius);
+        final shadowPaint = Paint()..color = eff.color;
+        if (eff.blurRadius > 0) {
+          shadowPaint.maskFilter = MaskFilter.blur(BlurStyle.normal, eff.blurRadius);
+        }
         final shadowRect = rect
             .shift(Offset(eff.offsetX, eff.offsetY))
             .inflate(eff.spreadRadius);
         _drawShapeGeometry(canvas, node, shadowRect, shadowPaint);
       } else if (eff.type == DesignEffectType.outerGlow) {
-        final glowPaint = Paint()
-          ..color = eff.color
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, eff.blurRadius);
+        final glowPaint = Paint()..color = eff.color;
+        if (eff.blurRadius > 0) {
+          glowPaint.maskFilter = MaskFilter.blur(BlurStyle.normal, eff.blurRadius);
+        }
         final glowRect = rect.inflate(eff.spreadRadius + 2.0);
         _drawShapeGeometry(canvas, node, glowRect, glowPaint);
       }
@@ -399,13 +406,15 @@ class NodeRenderService {
     final path = getNodePath(node, rect);
     canvas.clipPath(path);
 
-    final shadowPaint = Paint()
-      ..color = eff.color
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, eff.blurRadius);
+    final shadowPaint = Paint()..color = eff.color;
+    if (eff.blurRadius > 0) {
+      shadowPaint.maskFilter = MaskFilter.blur(BlurStyle.normal, eff.blurRadius);
+    }
 
     // Draw inverted outer boundary to cast shadow inward
+    final inflateAmt = math.max(eff.blurRadius, 10.0) * 3 + (eff.spreadRadius > 0 ? eff.spreadRadius : 0);
     final outer = Path()
-      ..addRect(rect.inflate(eff.blurRadius * 3))
+      ..addRect(rect.inflate(inflateAmt))
       ..addPath(path.shift(Offset(eff.offsetX, eff.offsetY)), Offset.zero)
       ..fillType = PathFillType.evenOdd;
 
@@ -423,12 +432,14 @@ class NodeRenderService {
     final path = getNodePath(node, rect);
     canvas.clipPath(path);
 
-    final glowPaint = Paint()
-      ..color = eff.color
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, eff.blurRadius);
+    final glowPaint = Paint()..color = eff.color;
+    if (eff.blurRadius > 0) {
+      glowPaint.maskFilter = MaskFilter.blur(BlurStyle.normal, eff.blurRadius);
+    }
 
+    final inflateAmt = math.max(eff.blurRadius, 10.0) * 3 + eff.spreadRadius;
     final outer = Path()
-      ..addRect(rect.inflate(eff.blurRadius * 3))
+      ..addRect(rect.inflate(inflateAmt))
       ..addPath(path, Offset.zero)
       ..fillType = PathFillType.evenOdd;
 

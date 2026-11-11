@@ -242,6 +242,32 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
     }
   }
 
+  Future<void> _handleImportHtml(EditorController controller) async {
+    try {
+      final picked = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: ['html', 'htm'],
+      );
+      if (picked != null) {
+        final bytes = await picked.readAsBytes();
+        final decoder = Encoding.getByName('utf-8')!;
+        final htmlString = decoder.decode(bytes);
+        controller.importHtml(htmlString);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('HTML layout imported onto canvas!')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to import HTML: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _handleInsertImage(EditorController controller) async {
     try {
       final picked = await FilePicker.pickFile(
@@ -1273,6 +1299,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
         iconSize: 16,
         tooltip: 'Import SVG',
         onPressed: () => _handleImportSvg(controller),
+      ),
+      const SizedBox(width: 4),
+      NeuIconButton(
+        icon: Icons.html_rounded,
+        size: 34,
+        iconSize: 18,
+        tooltip: 'Import HTML Layout',
+        onPressed: () => _handleImportHtml(controller),
       ),
       const SizedBox(width: 4),
       NeuIconButton(

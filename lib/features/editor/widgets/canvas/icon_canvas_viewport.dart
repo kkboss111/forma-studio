@@ -89,11 +89,15 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
   final StrokeCap _strokeCap = StrokeCap.round;
   final StrokeJoin _strokeJoin = StrokeJoin.round;
 
-  // Interactive drawing / manipulation state
-  Offset? _dragStart;
-  Offset? _dragCurrent;
+  // Interactive drawing & manipulation state
+  bool _isPanning = false;
+  Offset? _panStartScreen;
+  Offset? _drawingStart;
+  Offset? _drawingCurrent;
   final List<Offset> _activePenPoints = [];
+  Offset? _hoveredArtboardPos;
   DesignNode? _transformingNodeOriginal;
+  Offset? _nodeMoveStart;
 
   // Undo / Redo history
   final List<List<DesignNode>> _undoHistory = [];
@@ -110,7 +114,6 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
     _showCenterAxes = widget.tab.showCenterAxes;
     _snapToPixel = widget.tab.snapToPixel;
 
-    // If initial tab is completely empty, populate with a starter heart glyph
     if (_nodes.isEmpty) {
       _loadTemplateGlyph('heart');
     }
@@ -171,22 +174,45 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
     );
   }
 
-  Offset _snap(Offset pt) {
-    if (!_snapToPixel) return pt;
-    return Offset(
-      (pt.dx).roundToDouble().clamp(0.0, _iconSize),
-      (pt.dy).roundToDouble().clamp(0.0, _iconSize),
+  // ---------------------------------------------------------------------------
+  // Geometry & Coordinate Conversion
+  // Maps between viewport screen coordinates and centered bounded icon artboard.
+  // ---------------------------------------------------------------------------
+  Rect _getArtboardRect(Size viewportSize) {
+    final center = Offset(viewportSize.width / 2, viewportSize.height / 2) + _panOffset;
+    final artboardPixelSize = _iconSize * _zoom;
+    return Rect.fromCenter(
+      center: center,
+      width: artboardPixelSize,
+      height: artboardPixelSize,
     );
   }
 
-  Offset _screenToDoc(Offset screen, Size viewportSize) {
-    final center = Offset(viewportSize.width / 2, viewportSize.height / 2) + _panOffset;
-    final artboardTopLeft = center - Offset((_iconSize * _zoom) / 2, (_iconSize * _zoom) / 2);
-    return (screen - artboardTopLeft) / _zoom;
+  Offset _screenToArtboard(
+    Offset screenPos,
+    Size viewportSize, {
+    bool clampToBounds = true,
+  }) {
+    final artboardRect = _getArtboardRect(viewportSize);
+    final relative = screenPos - artboardRect.topLeft;
+    double x = relative.dx / _zoom;
+    double y = relative.dy / _zoom;
+
+    if (clampToBounds) {
+      x = x.clamp(0.0, _iconSize);
+      y = y.clamp(0.0, _iconSize);
+    }
+
+    if (_snapToPixel) {
+      x = x.roundToDouble();
+      y = y.roundToDouble();
+    }
+
+    return Offset(x, y);
   }
 
   void _fitToViewport(Size viewportSize) {
-    final available = math.min(viewportSize.width - 200, viewportSize.height - 200);
+    final available = math.min(viewportSize.width - 240, viewportSize.height - 240);
     final targetZoom = (available / _iconSize).clamp(4.0, 48.0);
     setState(() {
       _zoom = targetZoom;
@@ -213,7 +239,7 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
   }
 
   // ---------------------------------------------------------------------------
-  // Built-in starter glyph templates for immediate testing & crafting
+  // Starter Glyph Templates
   // ---------------------------------------------------------------------------
   void _loadTemplateGlyph(String template) {
     _recordHistory();
@@ -342,21 +368,28 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
   }
 
   // ---------------------------------------------------------------------------
-  // Canvas pointer event handling
+  // Gesture Handling with Accurate Screen-To-Artboard Mapping
   // ---------------------------------------------------------------------------
-  void _onPointerDown(PointerDownEvent event, Size viewportSize) {
-    if (event.buttons == kMiddleMouseButton || HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.space)) {
-      _dragStart = event.localPosition;
+  void _onPanDown(DragDownDetails details, Size viewportSize) {
+    final screenPos = details.localPosition;
+    final artboardRect = _getArtboardRect(viewportSize);
+
+    // If spacebar is pressed, middle-click, or touch is outside artboard boundary, pan viewport
+    if (HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.space) ||
+        !artboardRect.inflate(20).contains(screenPos)) {
+      _isPanning = true;
+      _panStartScreen = screenPos;
       return;
     }
 
-    final docPt = _snap(_screenToDoc(event.localPosition, viewportSize));
+    _isPanning = false;
+    final artboardPt = _screenToArtboard(screenPos, viewportSize);
 
     if (_activeTool == IconStudioTool.select) {
       String? hitId;
       for (int i = _nodes.length - 1; i >= 0; i--) {
         final n = _nodes[i];
-        if (n.rect.inflate(2.0).contains(docPt)) {
+        if (n.rect.inflate(2.0).contains(artboardPt)) {
           hitId = n.id;
           break;
         }
@@ -367,17 +400,17 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
       });
 
       if (hitId != null) {
-        _dragStart = docPt;
+        _nodeMoveStart = artboardPt;
         _transformingNodeOriginal = _nodes.firstWhere((n) => n.id == hitId);
         _recordHistory();
       }
     } else if (_activeTool == IconStudioTool.pen) {
       setState(() {
-        _activePenPoints.add(docPt);
+        _activePenPoints.add(artboardPt);
       });
     } else if (_activeTool == IconStudioTool.eraser) {
       for (int i = _nodes.length - 1; i >= 0; i--) {
-        if (_nodes[i].rect.inflate(3.0).contains(docPt)) {
+        if (_nodes[i].rect.inflate(3.0).contains(artboardPt)) {
           _recordHistory();
           setState(() {
             _nodes.removeAt(i);
@@ -388,26 +421,35 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
         }
       }
     } else {
-      _dragStart = docPt;
-      _dragCurrent = docPt;
+      // Shape tool drag initiation
+      setState(() {
+        _drawingStart = artboardPt;
+        _drawingCurrent = artboardPt;
+      });
     }
   }
 
-  void _onPointerMove(PointerMoveEvent event, Size viewportSize) {
-    if (event.buttons == kMiddleMouseButton || HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.space)) {
-      if (_dragStart != null) {
+  void _onPanUpdate(DragUpdateDetails details, Size viewportSize) {
+    final screenPos = details.localPosition;
+
+    if (_isPanning) {
+      if (_panStartScreen != null) {
         setState(() {
-          _panOffset += (event.localPosition - _dragStart!);
-          _dragStart = event.localPosition;
+          _panOffset += (screenPos - _panStartScreen!);
+          _panStartScreen = screenPos;
         });
       }
       return;
     }
 
-    final docPt = _snap(_screenToDoc(event.localPosition, viewportSize));
+    final artboardPt = _screenToArtboard(screenPos, viewportSize);
+    setState(() => _hoveredArtboardPos = artboardPt);
 
-    if (_activeTool == IconStudioTool.select && _selectedNodeId != null && _dragStart != null && _transformingNodeOriginal != null) {
-      final delta = docPt - _dragStart!;
+    if (_activeTool == IconStudioTool.select &&
+        _selectedNodeId != null &&
+        _nodeMoveStart != null &&
+        _transformingNodeOriginal != null) {
+      final delta = artboardPt - _nodeMoveStart!;
       setState(() {
         final idx = _nodes.indexWhere((n) => n.id == _selectedNodeId);
         if (idx != -1) {
@@ -419,29 +461,38 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
         }
       });
     } else if (_activeTool == IconStudioTool.pen && _activePenPoints.isNotEmpty) {
-      if ((_activePenPoints.last - docPt).distance > 0.5) {
+      if ((_activePenPoints.last - artboardPt).distance > 0.5) {
         setState(() {
-          _activePenPoints.add(docPt);
+          _activePenPoints.add(artboardPt);
         });
       }
-    } else if (_dragStart != null && _activeTool != IconStudioTool.select) {
+    } else if (_drawingStart != null) {
       setState(() {
-        _dragCurrent = docPt;
+        _drawingCurrent = artboardPt;
       });
     }
   }
 
-  void _onPointerUp(PointerUpEvent event, Size viewportSize) {
+  void _onPanEnd(DragEndDetails details, Size viewportSize) {
+    if (_isPanning) {
+      _isPanning = false;
+      _panStartScreen = null;
+      return;
+    }
+
     if (_activeTool == IconStudioTool.select) {
-      _dragStart = null;
+      _nodeMoveStart = null;
       _transformingNodeOriginal = null;
       _notifyTabChanged();
       return;
     }
 
-    if (_dragStart != null && _dragCurrent != null && _activeTool != IconStudioTool.pen) {
-      final rect = Rect.fromPoints(_dragStart!, _dragCurrent!);
-      if (rect.width > 0.5 || rect.height > 0.5) {
+    if (_drawingStart != null && _drawingCurrent != null && _activeTool != IconStudioTool.pen) {
+      final start = _drawingStart!;
+      final end = _drawingCurrent!;
+      final rect = Rect.fromPoints(start, end);
+
+      if (rect.width >= 0.5 || rect.height >= 0.5) {
         _recordHistory();
         final id = _uuid.v4();
         DesignNode? created;
@@ -464,8 +515,8 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
               type: NodeType.rectangle,
               x: rect.left,
               y: rect.top,
-              width: rect.width,
-              height: rect.height,
+              width: math.max(1.0, rect.width),
+              height: math.max(1.0, rect.height),
               strokes: strokes,
               fills: fills,
             );
@@ -477,8 +528,8 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
               type: NodeType.roundedRectangle,
               x: rect.left,
               y: rect.top,
-              width: rect.width,
-              height: rect.height,
+              width: math.max(1.0, rect.width),
+              height: math.max(1.0, rect.height),
               cornerRadii: const CornerRadii.all(3.0),
               strokes: strokes,
               fills: fills,
@@ -491,8 +542,8 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
               type: NodeType.ellipse,
               x: rect.left,
               y: rect.top,
-              width: rect.width,
-              height: rect.height,
+              width: math.max(1.0, rect.width),
+              height: math.max(1.0, rect.height),
               strokes: strokes,
               fills: fills,
             );
@@ -502,10 +553,10 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
               id: id,
               name: 'Line',
               type: NodeType.line,
-              x: _dragStart!.dx,
-              y: _dragStart!.dy,
-              width: _dragCurrent!.dx - _dragStart!.dx,
-              height: _dragCurrent!.dy - _dragStart!.dy,
+              x: start.dx,
+              y: start.dy,
+              width: end.dx - start.dx,
+              height: end.dy - start.dy,
               strokes: strokes,
               fills: const [],
             );
@@ -517,8 +568,8 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
               type: NodeType.star,
               x: rect.left,
               y: rect.top,
-              width: rect.width,
-              height: rect.height,
+              width: math.max(1.0, rect.width),
+              height: math.max(1.0, rect.height),
               starPoints: 5,
               starInnerRadiusRatio: 0.4,
               strokes: strokes,
@@ -537,10 +588,33 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
           _notifyTabChanged();
         }
       }
+
       setState(() {
-        _dragStart = null;
-        _dragCurrent = null;
-        _activeTool = IconStudioTool.select;
+        _drawingStart = null;
+        _drawingCurrent = null;
+      });
+    }
+  }
+
+  void _onTapDown(TapDownDetails details, Size viewportSize) {
+    final screenPos = details.localPosition;
+    final artboardPt = _screenToArtboard(screenPos, viewportSize);
+
+    if (_activeTool == IconStudioTool.pen) {
+      setState(() {
+        _activePenPoints.add(artboardPt);
+      });
+    } else if (_activeTool == IconStudioTool.select) {
+      String? hitId;
+      for (int i = _nodes.length - 1; i >= 0; i--) {
+        final n = _nodes[i];
+        if (n.rect.inflate(2.0).contains(artboardPt)) {
+          hitId = n.id;
+          break;
+        }
+      }
+      setState(() {
+        _selectedNodeId = hitId;
       });
     }
   }
@@ -686,10 +760,10 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
     await Clipboard.setData(ClipboardData(text: svgContent));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('SVG code copied to clipboard!'),
+        const SnackBar(
+          content: Text('SVG code copied to clipboard!'),
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
+          duration: Duration(seconds: 2),
         ),
       );
     }
@@ -743,7 +817,7 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
           color: tokens.isDark ? const Color(0xFF080C14) : const Color(0xFFF1EFEA),
           child: Stack(
             children: [
-              // 1. Interactive Canvas Gestures Area
+              // 1. Interactive Canvas Gestures Area (Pan, Draw, Select)
               Positioned.fill(
                 child: Listener(
                   onPointerSignal: (event) {
@@ -761,26 +835,39 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
                       }
                     }
                   },
-                  onPointerDown: (e) => _onPointerDown(e, viewportSize),
-                  onPointerMove: (e) => _onPointerMove(e, viewportSize),
-                  onPointerUp: (e) => _onPointerUp(e, viewportSize),
-                  child: CustomPaint(
-                    size: viewportSize,
-                    painter: _BoundedIconCanvasPainter(
-                      iconSize: _iconSize,
-                      zoom: _zoom,
-                      panOffset: _panOffset,
-                      nodes: _nodes,
-                      selectedNodeId: _selectedNodeId,
-                      showPixelGrid: _showPixelGrid,
-                      showSubpixelGrid: _showSubpixelGrid,
-                      showKeylines: _showKeylines,
-                      showCenterAxes: _showCenterAxes,
-                      activePenPoints: _activePenPoints,
-                      drawingStart: _dragStart,
-                      drawingCurrent: _dragCurrent,
-                      activeTool: _activeTool,
-                      isDarkTheme: tokens.isDark,
+                  child: MouseRegion(
+                    cursor: _activeTool == IconStudioTool.select
+                        ? SystemMouseCursors.basic
+                        : SystemMouseCursors.precise,
+                    onHover: (e) {
+                      final pt = _screenToArtboard(e.localPosition, viewportSize);
+                      setState(() => _hoveredArtboardPos = pt);
+                    },
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanDown: (d) => _onPanDown(d, viewportSize),
+                      onPanUpdate: (d) => _onPanUpdate(d, viewportSize),
+                      onPanEnd: (d) => _onPanEnd(d, viewportSize),
+                      onTapDown: (d) => _onTapDown(d, viewportSize),
+                      child: CustomPaint(
+                        size: viewportSize,
+                        painter: _BoundedIconCanvasPainter(
+                          iconSize: _iconSize,
+                          zoom: _zoom,
+                          panOffset: _panOffset,
+                          nodes: _nodes,
+                          selectedNodeId: _selectedNodeId,
+                          showPixelGrid: _showPixelGrid,
+                          showSubpixelGrid: _showSubpixelGrid,
+                          showKeylines: _showKeylines,
+                          showCenterAxes: _showCenterAxes,
+                          activePenPoints: _activePenPoints,
+                          drawingStart: _drawingStart,
+                          drawingCurrent: _drawingCurrent,
+                          activeTool: _activeTool,
+                          isDarkTheme: tokens.isDark,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1528,7 +1615,7 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
   }
 
   // ---------------------------------------------------------------------------
-  // Zoom & HUD at Bottom Left
+  // Zoom, Coordinate Display & HUD at Bottom Left
   // ---------------------------------------------------------------------------
   Widget _buildZoomAndPresetsHUD(
     BuildContext context,
@@ -1586,6 +1673,26 @@ class _IconCanvasViewportState extends ConsumerState<IconCanvasViewport> {
             padding: const EdgeInsets.all(4),
             constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
           ),
+          if (_hoveredArtboardPos != null) ...[
+            Container(
+              width: 1,
+              height: 14,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              color: tokens.borderSubtle,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                '${_hoveredArtboardPos!.dx.toInt()}, ${_hoveredArtboardPos!.dy.toInt()}',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w600,
+                  color: tokens.accent,
+                ),
+              ),
+            ),
+          ],
           if (!_showPreviewDock) ...[
             Container(
               width: 1,

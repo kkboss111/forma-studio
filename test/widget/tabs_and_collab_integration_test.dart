@@ -11,6 +11,7 @@ import 'package:forma_studio/features/editor/widgets/tabs/editor_tab_bar.dart';
 import 'package:forma_studio/features/editor/widgets/canvas/canvas_viewport.dart';
 import 'package:forma_studio/features/editor/widgets/canvas/icon_canvas_viewport.dart';
 import 'package:forma_studio/features/editor/widgets/dialogs/collab_dialog.dart';
+import 'package:forma_studio/features/editor/widgets/panels/room_operator_menu.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -63,8 +64,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(CollabDialog), findsOneWidget);
-      expect(find.text('Create Session'), findsOneWidget);
-      expect(find.text('Join Session'), findsOneWidget);
+      expect(find.text('Start Live Room Now'), findsOneWidget);
+      expect(find.text('Join'), findsOneWidget);
 
       // Dismiss CollabDialog
       await tester.tap(find.byIcon(Icons.close_rounded));
@@ -108,6 +109,46 @@ void main() {
       // Verify CanvasViewport is restored
       expect(find.byType(CanvasViewport), findsOneWidget);
       expect(find.byType(IconCanvasViewport), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'RoomOperatorMenu renders modal and handles dismissal cleanly',
+    (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    onPressed: () => showRoomOperatorMenu(context),
+                    child: const Text('Open Operator Menu'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Open operator menu
+      await tester.tap(find.text('Open Operator Menu'));
+      await tester.pumpAndSettle();
+
+      // Verify RoomOperatorMenu appears with disconnected/idle state
+      expect(find.byType(RoomOperatorMenu), findsOneWidget);
+      expect(find.text('No Active Collaborative Room'), findsOneWidget);
+
+      // Dismiss menu via Close button
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RoomOperatorMenu), findsNothing);
     },
   );
 }

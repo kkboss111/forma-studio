@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/models/node_model.dart';
 
 /// Vibrant Figma-grade color palette curated for high visibility and contrast
-/// on both dark voids (Obsidian Dark, Cosmic Glass) and warm paper surfaces (Light Mode).
+/// on both dark voids (Obsidian Dark) and warm paper surfaces (Light Mode).
 class CollaboratorColorPalette {
   CollaboratorColorPalette._();
 
@@ -32,6 +32,26 @@ class CollaboratorColorPalette {
   }
 }
 
+/// Access permission level for a collaborator in a room session.
+enum CollaboratorRole {
+  host,
+  editor,
+  viewer;
+
+  String get label {
+    switch (this) {
+      case CollaboratorRole.host:
+        return 'Host (Admin)';
+      case CollaboratorRole.editor:
+        return 'Editor (Can Draw)';
+      case CollaboratorRole.viewer:
+        return 'Viewer (Read-Only)';
+    }
+  }
+
+  bool get canEdit => this == CollaboratorRole.host || this == CollaboratorRole.editor;
+}
+
 /// Represents an active peer collaborator in a real-time collaborative design room.
 class Collaborator {
   final String id;
@@ -42,6 +62,7 @@ class Collaborator {
   final Set<String> activeNodeIds;
   final DateTime lastActive;
   final bool isHost;
+  final CollaboratorRole role;
   final String? activeCanvasTabId;
   final String? statusMessage;
 
@@ -54,9 +75,13 @@ class Collaborator {
     this.activeNodeIds = const {},
     required this.lastActive,
     this.isHost = false,
+    this.role = CollaboratorRole.editor,
     this.activeCanvasTabId,
     this.statusMessage,
   });
+
+  /// Whether this user currently has permission to edit the canvas.
+  bool get canEdit => isHost || role.canEdit;
 
   /// 1-2 character initials for avatar fallback (e.g. "Sarah Chen" -> "SC").
   String get initials {
@@ -82,6 +107,7 @@ class Collaborator {
     Set<String>? activeNodeIds,
     DateTime? lastActive,
     bool? isHost,
+    CollaboratorRole? role,
     String? activeCanvasTabId,
     String? statusMessage,
   }) {
@@ -94,6 +120,7 @@ class Collaborator {
       activeNodeIds: activeNodeIds ?? this.activeNodeIds,
       lastActive: lastActive ?? this.lastActive,
       isHost: isHost ?? this.isHost,
+      role: role ?? this.role,
       activeCanvasTabId: activeCanvasTabId ?? this.activeCanvasTabId,
       statusMessage: statusMessage ?? this.statusMessage,
     );
@@ -112,6 +139,7 @@ class Collaborator {
     'activeNodeIds': activeNodeIds.toList(),
     'lastActive': lastActive.toIso8601String(),
     'isHost': isHost,
+    'role': role.name,
     if (activeCanvasTabId != null) 'activeCanvasTabId': activeCanvasTabId,
     if (statusMessage != null) 'statusMessage': statusMessage,
   };
@@ -128,6 +156,14 @@ class Collaborator {
 
     final rawNodeIds = json['activeNodeIds'] as List<dynamic>? ?? [];
     final activeNodeIds = rawNodeIds.map((e) => e.toString()).toSet();
+    final isHostVal = json['isHost'] as bool? ?? false;
+    final roleName = json['role'] as String?;
+    final role = roleName != null
+        ? CollaboratorRole.values.firstWhere(
+            (r) => r.name == roleName,
+            orElse: () => isHostVal ? CollaboratorRole.host : CollaboratorRole.editor,
+          )
+        : (isHostVal ? CollaboratorRole.host : CollaboratorRole.editor);
 
     return Collaborator(
       id: json['id'] as String,
@@ -141,7 +177,8 @@ class Collaborator {
       lastActive: json['lastActive'] != null
           ? DateTime.tryParse(json['lastActive'] as String) ?? DateTime.now()
           : DateTime.now(),
-      isHost: json['isHost'] as bool? ?? false,
+      isHost: isHostVal,
+      role: role,
       activeCanvasTabId: json['activeCanvasTabId'] as String?,
       statusMessage: json['statusMessage'] as String?,
     );
@@ -155,10 +192,11 @@ class Collaborator {
           id == other.id &&
           name == other.name &&
           cursorPosition == other.cursorPosition &&
-          isHost == other.isHost;
+          isHost == other.isHost &&
+          role == other.role;
 
   @override
-  int get hashCode => Object.hash(id, name, cursorPosition, isHost);
+  int get hashCode => Object.hash(id, name, cursorPosition, isHost, role);
 }
 
 /// Metadata and active state of a shared real-time design room session.
@@ -168,6 +206,8 @@ class CollabSession {
   final String hostId;
   final List<Collaborator> participants;
   final bool isConnected;
+  final bool isLocked;
+  final int pingMs;
   final DateTime? lastSyncedAt;
   final String? currentUserId;
   final Map<String, dynamic> customMetadata;
@@ -178,6 +218,8 @@ class CollabSession {
     required this.hostId,
     this.participants = const [],
     this.isConnected = true,
+    this.isLocked = false,
+    this.pingMs = 14,
     this.lastSyncedAt,
     this.currentUserId,
     this.customMetadata = const {},
@@ -220,6 +262,8 @@ class CollabSession {
     String? hostId,
     List<Collaborator>? participants,
     bool? isConnected,
+    bool? isLocked,
+    int? pingMs,
     DateTime? lastSyncedAt,
     String? currentUserId,
     Map<String, dynamic>? customMetadata,
@@ -230,6 +274,8 @@ class CollabSession {
       hostId: hostId ?? this.hostId,
       participants: participants ?? this.participants,
       isConnected: isConnected ?? this.isConnected,
+      isLocked: isLocked ?? this.isLocked,
+      pingMs: pingMs ?? this.pingMs,
       lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
       currentUserId: currentUserId ?? this.currentUserId,
       customMetadata: customMetadata ?? this.customMetadata,
@@ -242,6 +288,8 @@ class CollabSession {
     'hostId': hostId,
     'participants': participants.map((p) => p.toJson()).toList(),
     'isConnected': isConnected,
+    'isLocked': isLocked,
+    'pingMs': pingMs,
     if (lastSyncedAt != null) 'lastSyncedAt': lastSyncedAt!.toIso8601String(),
     if (currentUserId != null) 'currentUserId': currentUserId,
     'customMetadata': customMetadata,
@@ -259,6 +307,8 @@ class CollabSession {
       hostId: json['hostId'] as String? ?? '',
       participants: participants,
       isConnected: json['isConnected'] as bool? ?? true,
+      isLocked: json['isLocked'] as bool? ?? false,
+      pingMs: json['pingMs'] as int? ?? 14,
       lastSyncedAt: json['lastSyncedAt'] != null
           ? DateTime.tryParse(json['lastSyncedAt'] as String)
           : null,
@@ -276,6 +326,10 @@ enum CollabDeltaType {
   cursorMoved,
   selectionChanged,
   projectSnapshot,
+  roleChanged,
+  userKicked,
+  roomLocked,
+  forceSync,
 }
 
 /// An atomic operational delta representing real-time changes to the canvas,
@@ -410,6 +464,78 @@ class CollabDelta {
       senderId: senderId,
       senderName: senderName,
       type: CollabDeltaType.projectSnapshot,
+      timestamp: DateTime.now(),
+      nodes: nodes,
+    );
+  }
+
+  /// Factory when room operator changes a participant's role (Editor / Viewer).
+  factory CollabDelta.roleChanged({
+    required String senderId,
+    required String senderName,
+    required String targetUserId,
+    required CollaboratorRole newRole,
+  }) {
+    return CollabDelta(
+      id: 'role_${DateTime.now().millisecondsSinceEpoch}',
+      senderId: senderId,
+      senderName: senderName,
+      type: CollabDeltaType.roleChanged,
+      timestamp: DateTime.now(),
+      payload: {
+        'targetUserId': targetUserId,
+        'newRole': newRole.name,
+      },
+    );
+  }
+
+  /// Factory when room operator kicks a participant.
+  factory CollabDelta.userKicked({
+    required String senderId,
+    required String senderName,
+    required String targetUserId,
+    String? reason,
+  }) {
+    return CollabDelta(
+      id: 'kick_${DateTime.now().millisecondsSinceEpoch}',
+      senderId: senderId,
+      senderName: senderName,
+      type: CollabDeltaType.userKicked,
+      timestamp: DateTime.now(),
+      payload: {
+        'targetUserId': targetUserId,
+        ...? (reason != null ? {'reason': reason} : null),
+      },
+    );
+  }
+
+  /// Factory when room operator locks or unlocks the room.
+  factory CollabDelta.roomLocked({
+    required String senderId,
+    required String senderName,
+    required bool isLocked,
+  }) {
+    return CollabDelta(
+      id: 'lock_${DateTime.now().millisecondsSinceEpoch}',
+      senderId: senderId,
+      senderName: senderName,
+      type: CollabDeltaType.roomLocked,
+      timestamp: DateTime.now(),
+      payload: {'isLocked': isLocked},
+    );
+  }
+
+  /// Factory when room operator requests a forced canvas resynchronization.
+  factory CollabDelta.forceSync({
+    required String senderId,
+    required String senderName,
+    required List<DesignNode> nodes,
+  }) {
+    return CollabDelta(
+      id: 'forcesync_${DateTime.now().millisecondsSinceEpoch}',
+      senderId: senderId,
+      senderName: senderName,
+      type: CollabDeltaType.forceSync,
       timestamp: DateTime.now(),
       nodes: nodes,
     );

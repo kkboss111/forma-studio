@@ -2,12 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../../domain/models/node_model.dart';
 import 'collab_models.dart';
 import 'firebase_collab_adapter.dart';
 
 /// Central real-time multi-user collaboration engine.
 /// Coordinates session presence, live cursor synchronization, delta broadcasting,
-/// and local vs remote state reconciliation.
+/// room operator permissions, and local vs remote state reconciliation.
 class CollabService extends ChangeNotifier {
   final CollabBackendAdapter _adapter;
   final Uuid _uuid = const Uuid();
@@ -48,6 +49,18 @@ class CollabService extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   String get adapterName => _adapter.adapterName;
 
+  /// Whether current local user is the host/operator of the active room.
+  bool get isHost => _session != null && _localUser != null && _session!.hostId == _localUser!.id;
+
+  /// Whether current local user has canvas editing permissions.
+  bool get canEdit => isHost || (_localUser?.canEdit ?? true);
+
+  /// Live latency ping in milliseconds (e.g. 14ms).
+  int get pingMs => _session?.pingMs ?? 14;
+
+  /// Whether active room is locked to new participants.
+  bool get isRoomLocked => _session?.isLocked ?? false;
+
   /// Current active collaborators list (including local user if connected).
   List<Collaborator> get activeCollaborators => _activeCollaborators;
 
@@ -59,7 +72,8 @@ class CollabService extends ChangeNotifier {
 
   /// Live streams
   Stream<CollabSession?> get sessionStream => _sessionController.stream;
-  Stream<List<Collaborator>> get collaboratorsStream => _adapter.streamCollaborators(_session?.roomId ?? '');
+  Stream<List<Collaborator>> get collaboratorsStream =>
+      _adapter.streamCollaborators(_session?.roomId ?? '');
   Stream<CollabDelta> get incomingDeltaStream => _incomingDeltaController.stream;
 
   void _initDefaultUser() {
@@ -69,6 +83,7 @@ class CollabService extends ChangeNotifier {
       id: userId,
       name: 'Designer',
       color: userColor,
+      role: CollaboratorRole.editor,
       lastActive: DateTime.now(),
     );
   }
@@ -99,6 +114,31 @@ class CollabService extends ChangeNotifier {
   }
 
   // ===========================================================================
+  // Instant 1-Click Onboarding
+  // ===========================================================================
+
+  /// Instant 1-click room creation. Immediately spins up room, generates 6-letter
+  /// code, and establishes host presence without unnecessary friction.
+  Future<CollabSession> quickHostRoom({
+    String? roomName,
+    String? userName,
+    Color? color,
+  }) async {
+    final defaultName = roomName?.trim().isNotEmpty == true
+        ? roomName!.trim()
+        : 'Forma Studio Live';
+    final designerName = userName?.trim().isNotEmpty == true
+        ? userName!.trim()
+        : (_localUser?.name ?? 'Lead Designer');
+
+    return createRoom(
+      defaultName,
+      userName: designerName,
+      color: color ?? _localUser?.color,
+    );
+  }
+
+  // ===========================================================================
   // Session Lifecycle
   // ===========================================================================
 
@@ -119,6 +159,7 @@ class CollabService extends ChangeNotifier {
 
       final hostUser = _localUser!.copyWith(
         isHost: true,
+        role: CollaboratorRole.host,
         lastActive: DateTime.now(),
       );
       _localUser = hostUser;
@@ -161,6 +202,7 @@ class CollabService extends ChangeNotifier {
 
       final joinUser = _localUser!.copyWith(
         isHost: false,
+        role: CollaboratorRole.editor,
         lastActive: DateTime.now(),
       );
       _localUser = joinUser;
@@ -169,6 +211,13 @@ class CollabService extends ChangeNotifier {
         roomId: cleanRoomCode,
         user: joinUser,
       );
+
+      if (session.isLocked) {
+        _isConnecting = false;
+        _errorMessage = 'Room $cleanRoomCode is locked by the operator.';
+        notifyListeners();
+        throw Exception('Room is locked by host.');
+      }
 
       _session = session;
       _subscribeToRoom(cleanRoomCode);
@@ -235,12 +284,138 @@ class CollabService extends ChangeNotifier {
         if (_localUser != null && delta.senderId == _localUser!.id) {
           return;
         }
+
+        // Handle Operator Delta Events
+        if (delta.type == CollabDeltaType.roleChanged) {
+          final targetId = delta.payload?['targetUserId'] as String?;
+          final roleName = delta.payload?['newRole'] as String?;
+          if (targetId != null && roleName != null) {
+            final newRole = CollaboratorRole.values.firstWhere(
+              (r) => r.name == roleName,
+              orElse: () => CollaboratorRole.editor,
+            );
+            _activeCollaborators = _activeCollaborators.map((c) {
+              if (c.id == targetId) return c.copyWith(role: newRole);
+              return c;
+            }).toList();
+
+            if (_localUser != null && _localUser!.id == targetId) {
+              _localUser = _localUser!.copyWith(role: newRole);
+            }
+            notifyListeners();
+          }
+        } else if (delta.type == CollabDeltaType.userKicked) {
+          final targetId = delta.payload?['targetUserId'] as String?;
+          if (targetId != null) {
+            if (_localUser != null && _localUser!.id == targetId) {
+              _errorMessage = 'You were removed from the room by the host.';
+              leaveRoom();
+              return;
+            }
+            _activeCollaborators =
+                _activeCollaborators.where((c) => c.id != targetId).toList();
+            notifyListeners();
+          }
+        } else if (delta.type == CollabDeltaType.roomLocked) {
+          final isLocked = delta.payload?['isLocked'] as bool? ?? false;
+          if (_session != null) {
+            _session = _session!.copyWith(isLocked: isLocked);
+            notifyListeners();
+          }
+        }
+
         _incomingDeltaController.add(delta);
       },
       onError: (err) {
         debugPrint('[CollabService] Node delta stream error: $err');
       },
     );
+  }
+
+  // ===========================================================================
+  // Room Operator / Host Actions
+  // ===========================================================================
+
+  /// Operator action: Changes a collaborator's access permission level (Editor vs Viewer).
+  void updateCollaboratorRole(String userId, CollaboratorRole newRole) {
+    if (!isHost || _session == null || _localUser == null) return;
+
+    _activeCollaborators = _activeCollaborators.map((c) {
+      if (c.id == userId) return c.copyWith(role: newRole);
+      return c;
+    }).toList();
+
+    final delta = CollabDelta.roleChanged(
+      senderId: _localUser!.id,
+      senderName: _localUser!.name,
+      targetUserId: userId,
+      newRole: newRole,
+    );
+    broadcastNodeDelta(delta);
+    notifyListeners();
+  }
+
+  /// Operator action: Kicks an unwanted participant out of the collaborative room.
+  void kickCollaborator(String userId, {String? reason}) {
+    if (!isHost || _session == null || _localUser == null) return;
+
+    _activeCollaborators = _activeCollaborators.where((c) => c.id != userId).toList();
+
+    final delta = CollabDelta.userKicked(
+      senderId: _localUser!.id,
+      senderName: _localUser!.name,
+      targetUserId: userId,
+      reason: reason ?? 'Removed by room operator',
+    );
+    broadcastNodeDelta(delta);
+    notifyListeners();
+  }
+
+  /// Operator action: Locks room to stop new participants from joining.
+  void setRoomLocked(bool isLocked) {
+    if (!isHost || _session == null || _localUser == null) return;
+
+    _session = _session!.copyWith(isLocked: isLocked);
+
+    final delta = CollabDelta.roomLocked(
+      senderId: _localUser!.id,
+      senderName: _localUser!.name,
+      isLocked: isLocked,
+    );
+    broadcastNodeDelta(delta);
+    notifyListeners();
+  }
+
+  /// Operator action: Force broadcasts full canvas state to synchronize all peers.
+  void forceSyncCanvas(List<DesignNode> currentNodes) {
+    if (!isConnected || _session == null || _localUser == null) return;
+
+    final delta = CollabDelta.forceSync(
+      senderId: _localUser!.id,
+      senderName: _localUser!.name,
+      nodes: currentNodes,
+    );
+    broadcastNodeDelta(delta);
+  }
+
+  /// Operator action: Closes the session and disconnects everyone.
+  Future<void> endSessionForAll() async {
+    if (!isHost || _session == null || _localUser == null) {
+      return leaveRoom();
+    }
+
+    // Inform all peers before leaving
+    for (final peer in remoteCollaborators) {
+      final delta = CollabDelta.userKicked(
+        senderId: _localUser!.id,
+        senderName: _localUser!.name,
+        targetUserId: peer.id,
+        reason: 'Session ended by operator',
+      );
+      broadcastNodeDelta(delta);
+    }
+
+    await leaveRoom();
   }
 
   // ===========================================================================

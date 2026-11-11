@@ -195,7 +195,7 @@ class FormaTheme {
   // 3. LIQUID GLASS TOKENS (Apple iOS 18 / visionOS Fluid Glassmorphism)
   // ===========================================================================
   static const liquidGlassTokens = FormaThemeTokens(
-    mode: FormaThemeMode.liquidGlass,
+    mode: FormaThemeMode.light,
     isDark: false,
     isGlass: true,
     scaffoldBg: Color(0xFFE0F2FE),
@@ -220,7 +220,7 @@ class FormaTheme {
   // 4. COSMIC GLASSMORPHISM TOKENS (Deep Space Midnight & Starlight Luminescence)
   // ===========================================================================
   static const glassmorphismTokens = FormaThemeTokens(
-    mode: FormaThemeMode.glassmorphism,
+    mode: FormaThemeMode.dark,
     isDark: true,
     isGlass: true,
     scaffoldBg: FormaColors.cosmicBg,
@@ -249,10 +249,6 @@ class FormaTheme {
         return lightTokens;
       case FormaThemeMode.dark:
         return darkTokens;
-      case FormaThemeMode.liquidGlass:
-        return liquidGlassTokens;
-      case FormaThemeMode.glassmorphism:
-        return glassmorphismTokens;
       case FormaThemeMode.system:
         return isSystemDark ? darkTokens : lightTokens;
     }

@@ -1039,10 +1039,25 @@ class _PropertiesPanelState extends ConsumerState<PropertiesPanel> {
                 final hasColor = eff.type == DesignEffectType.dropShadow ||
                     eff.type == DesignEffectType.innerShadow ||
                     eff.type == DesignEffectType.outerGlow ||
-                    eff.type == DesignEffectType.innerGlow;
+                    eff.type == DesignEffectType.innerGlow ||
+                    eff.type == DesignEffectType.backgroundBlur ||
+                    eff.type == DesignEffectType.colorTint;
 
                 final hasOffsets = eff.type == DesignEffectType.dropShadow ||
                     eff.type == DesignEffectType.innerShadow;
+
+                final hasSpread = eff.type == DesignEffectType.dropShadow ||
+                    eff.type == DesignEffectType.innerShadow ||
+                    eff.type == DesignEffectType.outerGlow ||
+                    eff.type == DesignEffectType.innerGlow;
+
+                final hasBlur = eff.type == DesignEffectType.dropShadow ||
+                    eff.type == DesignEffectType.innerShadow ||
+                    eff.type == DesignEffectType.blur ||
+                    eff.type == DesignEffectType.backgroundBlur ||
+                    eff.type == DesignEffectType.outerGlow ||
+                    eff.type == DesignEffectType.innerGlow ||
+                    eff.type == DesignEffectType.bloom;
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
@@ -1050,7 +1065,10 @@ class _PropertiesPanelState extends ConsumerState<PropertiesPanel> {
                   decoration: BoxDecoration(
                     color: tokens.wellBg,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: tokens.borderSubtle, width: 1.0),
+                    border: Border.all(
+                      color: eff.isVisible ? tokens.borderSubtle : tokens.borderSubtle.withValues(alpha: 0.4),
+                      width: 1.0,
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1088,10 +1106,27 @@ class _PropertiesPanelState extends ConsumerState<PropertiesPanel> {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: tokens.textMain,
+                                color: eff.isVisible ? tokens.textMain : tokens.textMuted,
                               ),
                             ),
                           ),
+                          InkWell(
+                            onTap: () {
+                              final updated = List<DesignEffect>.from(node.effects);
+                              updated[i] = eff.copyWith(isVisible: !eff.isVisible);
+                              controller.updateNode(node.copyWith(effects: updated));
+                            },
+                            borderRadius: BorderRadius.circular(4),
+                            child: Padding(
+                              padding: const EdgeInsets.all(2.0),
+                              child: Icon(
+                                eff.isVisible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                size: 14,
+                                color: tokens.textMuted,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
                           InkWell(
                             onTap: () {
                               final updated = List<DesignEffect>.from(node.effects)..removeAt(i);
@@ -1105,49 +1140,70 @@ class _PropertiesPanelState extends ConsumerState<PropertiesPanel> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: FormaTouchNudgeField(
-                              label: 'Blur',
-                              value: eff.blurRadius,
-                              min: 0,
-                              onChanged: (v) {
-                                final updated = List<DesignEffect>.from(node.effects);
-                                updated[i] = eff.copyWith(blurRadius: v);
-                                controller.updateNode(node.copyWith(effects: updated));
-                              },
-                            ),
-                          ),
-                          if (hasOffsets) ...[
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: FormaTouchNudgeField(
-                                label: 'X',
-                                value: eff.offsetX,
-                                onChanged: (v) {
-                                  final updated = List<DesignEffect>.from(node.effects);
-                                  updated[i] = eff.copyWith(offsetX: v);
-                                  controller.updateNode(node.copyWith(effects: updated));
-                                },
+                      if (eff.isVisible) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            if (hasBlur)
+                              Expanded(
+                                child: FormaTouchNudgeField(
+                                  label: 'Blur',
+                                  value: eff.blurRadius,
+                                  min: 0,
+                                  onChanged: (v) {
+                                    final updated = List<DesignEffect>.from(node.effects);
+                                    updated[i] = eff.copyWith(blurRadius: v);
+                                    controller.updateNode(node.copyWith(effects: updated));
+                                  },
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: FormaTouchNudgeField(
-                                label: 'Y',
-                                value: eff.offsetY,
-                                onChanged: (v) {
-                                  final updated = List<DesignEffect>.from(node.effects);
-                                  updated[i] = eff.copyWith(offsetY: v);
-                                  controller.updateNode(node.copyWith(effects: updated));
-                                },
+                            if (hasSpread) ...[
+                              if (hasBlur) const SizedBox(width: 6),
+                              Expanded(
+                                child: FormaTouchNudgeField(
+                                  label: 'Spread',
+                                  value: eff.spreadRadius,
+                                  onChanged: (v) {
+                                    final updated = List<DesignEffect>.from(node.effects);
+                                    updated[i] = eff.copyWith(spreadRadius: v);
+                                    controller.updateNode(node.copyWith(effects: updated));
+                                  },
+                                ),
                               ),
-                            ),
+                            ],
                           ],
+                        ),
+                        if (hasOffsets) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FormaTouchNudgeField(
+                                  label: 'X Offset',
+                                  value: eff.offsetX,
+                                  onChanged: (v) {
+                                    final updated = List<DesignEffect>.from(node.effects);
+                                    updated[i] = eff.copyWith(offsetX: v);
+                                    controller.updateNode(node.copyWith(effects: updated));
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: FormaTouchNudgeField(
+                                  label: 'Y Offset',
+                                  value: eff.offsetY,
+                                  onChanged: (v) {
+                                    final updated = List<DesignEffect>.from(node.effects);
+                                    updated[i] = eff.copyWith(offsetY: v);
+                                    controller.updateNode(node.copyWith(effects: updated));
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
-                      ),
+                      ],
                     ],
                   ),
                 );
@@ -2364,6 +2420,14 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
   final TextEditingController _customCtrl = TextEditingController();
   String _selectedCategory = 'All';
 
+  @override
+  void initState() {
+    super.initState();
+    CustomFontService.initializeOfflineFonts().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
   static const Map<String, List<String>> _fontCategories = {
     'All': [
       'Plus Jakarta Sans', 'Inter', 'Roboto', 'Poppins', 'Montserrat', 'Lato',
@@ -2373,6 +2437,7 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
       'Fira Code', 'JetBrains Mono', 'Roboto Mono', 'Source Code Pro', 'Space Mono',
       'Dancing Script', 'Pacifico', 'Caveat', 'Satisfy', 'Great Vibes'
     ],
+    'Custom': [],
     'Sans': [
       'Plus Jakarta Sans', 'Inter', 'Roboto', 'Poppins', 'Montserrat', 'Lato',
       'Open Sans', 'Raleway', 'Ubuntu', 'Nunito', 'Rubik', 'Work Sans'
@@ -2401,7 +2466,17 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
   @override
   Widget build(BuildContext context) {
     final tokens = widget.tokens;
-    final allFonts = _fontCategories[_selectedCategory] ?? _fontCategories['All']!;
+    final imported = CustomFontService.importedFonts;
+
+    List<String> allFonts;
+    if (_selectedCategory == 'Custom') {
+      allFonts = imported;
+    } else if (_selectedCategory == 'All') {
+      allFonts = [...imported, ..._fontCategories['All']!];
+    } else {
+      allFonts = _fontCategories[_selectedCategory] ?? _fontCategories['All']!;
+    }
+
     final query = _searchCtrl.text.toLowerCase().trim();
     final filteredFonts = allFonts.where((f) => f.toLowerCase().contains(query)).toList();
 
@@ -2457,26 +2532,14 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
                       icon: const Icon(Icons.file_upload_outlined, size: 14),
                       label: const Text('Import Font', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                       onPressed: () async {
-                        try {
-                          final result = await FilePicker.pickFile(
-                            type: FileType.custom,
-                            allowedExtensions: ['ttf', 'otf'],
-                          );
-                          if (result != null) {
-                            final bytes = await result.readAsBytes();
-                            final fontName = result.name.replaceAll('.ttf', '').replaceAll('.otf', '').trim();
-                            final loaded = await CustomFontService.loadFontFromBytes(
-                              familyName: fontName,
-                              fontBytes: bytes,
-                            );
-                            if (loaded && mounted) {
-                              widget.onFontSelected(fontName);
-                              if (context.mounted) {
-                                Navigator.pop(context);
-                              }
-                            }
+                        final importedName = await CustomFontService.pickAndImportFontFile();
+                        if (importedName != null && mounted) {
+                          setState(() {});
+                          widget.onFontSelected(importedName);
+                          if (context.mounted) {
+                            Navigator.pop(context);
                           }
-                        } catch (_) {}
+                        }
                       },
                     ),
                     const SizedBox(width: 6),
@@ -2600,12 +2663,17 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
               itemBuilder: (ctx, index) {
                 final font = filteredFonts[index];
                 final isSelected = widget.initialFont.toLowerCase() == font.toLowerCase();
+                final isOfflineFont = CustomFontService.isImported(font);
 
                 TextStyle fontStyle;
-                try {
-                  fontStyle = GoogleFonts.getFont(font, fontSize: 15, fontWeight: FontWeight.w600);
-                } catch (_) {
+                if (isOfflineFont) {
                   fontStyle = TextStyle(fontFamily: font, fontSize: 15, fontWeight: FontWeight.w600);
+                } else {
+                  try {
+                    fontStyle = GoogleFonts.getFont(font, fontSize: 15, fontWeight: FontWeight.w600);
+                  } catch (_) {
+                    fontStyle = TextStyle(fontFamily: font, fontSize: 15, fontWeight: FontWeight.w600);
+                  }
                 }
 
                 return InkWell(
@@ -2632,11 +2700,34 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                font,
-                                style: fontStyle.copyWith(
-                                  color: tokens.textMain,
-                                ),
+                              Row(
+                                children: [
+                                  Text(
+                                    font,
+                                    style: fontStyle.copyWith(
+                                      color: tokens.textMain,
+                                    ),
+                                  ),
+                                  if (isOfflineFont) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                      decoration: BoxDecoration(
+                                        color: tokens.accent.withValues(alpha: 0.16),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        'OFFLINE',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: tokens.accent,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                               const SizedBox(height: 2),
                               Text(

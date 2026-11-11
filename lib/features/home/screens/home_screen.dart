@@ -1131,14 +1131,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         themeLabel = 'Obsidian';
         orbColors = const [Color(0xFF1E293B), Color(0xFF0F172A)];
         break;
-      case FormaThemeMode.liquidGlass:
-        themeLabel = 'Liquid Glass';
-        orbColors = const [Color(0xFF38BDF8), Color(0xFF0284C7)];
-        break;
-      case FormaThemeMode.glassmorphism:
-        themeLabel = 'Cosmic';
-        orbColors = const [Color(0xFF818CF8), Color(0xFFC084FC)];
-        break;
       case FormaThemeMode.system:
         themeLabel = 'System';
         orbColors = [tokens.accent, tokens.accent.withValues(alpha: 0.6)];

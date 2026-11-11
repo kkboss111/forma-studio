@@ -19,6 +19,7 @@ import '../../../domain/models/animation_model.dart';
 import '../../../domain/services/vector_path_service.dart';
 import '../../../domain/services/node_render_service.dart';
 import '../../../core/export/svg_importer.dart';
+import '../../../core/export/html_importer.dart';
 import '../../../core/history/command.dart';
 import '../../../core/history/history_manager.dart';
 import '../../../core/persistence/project_repository.dart';
@@ -1873,6 +1874,35 @@ class EditorController extends StateNotifier<EditorState> {
       _repository.scheduleAutosave(current);
     } catch (e) {
       state = state.copyWith(statusMessage: 'SVG import failed: $e');
+    }
+  }
+
+  // --- HTML Import ---
+
+  void importHtml(String htmlString, {Offset? insertionPoint}) {
+    try {
+      final result = HtmlImporter.parseHtml(
+        htmlString,
+        insertionPoint: insertionPoint ?? const Offset(80, 80),
+      );
+      var current = state.project;
+
+      for (final child in result.childNodes) {
+        final cmd = AddNodeCommand(pageId: state.activePageId, node: child);
+        current = _history.executeCommand(cmd, current);
+      }
+
+      final rootCmd = AddNodeCommand(pageId: state.activePageId, node: result.rootFrame);
+      current = _history.executeCommand(rootCmd, current);
+
+      state = state.copyWith(
+        project: current,
+        selectedNodeIds: {result.rootFrame.id},
+        statusMessage: 'Imported HTML layout successfully (${result.childNodes.length + 1} elements)',
+      );
+      _repository.scheduleAutosave(current);
+    } catch (e) {
+      state = state.copyWith(statusMessage: 'HTML import failed: $e');
     }
   }
 

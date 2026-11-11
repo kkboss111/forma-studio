@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../theme/forma_colors.dart';
 import '../theme/forma_theme.dart';
 import '../theme/neumorphic.dart';
 import '../../features/settings/models/app_settings.dart';
 
-/// Modal dialog allowing instant visual switching between all 4 Forma Studio themes:
-/// Modern Light, Obsidian Dark, Liquid Glass, and Cosmic Glassmorphism.
+/// Modal dialog allowing instant visual switching between the 3 Forma Studio themes:
+/// System Default, Modern Studio Light, and Obsidian Studio Dark.
 class FormaThemePickerDialog extends ConsumerWidget {
   const FormaThemePickerDialog({super.key});
 
@@ -58,7 +57,7 @@ class FormaThemePickerDialog extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'STUDIO THEMES',
+                            'STUDIO THEME',
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w900,
@@ -85,61 +84,48 @@ class FormaThemePickerDialog extends ConsumerWidget {
               ),
               const SizedBox(height: 20),
 
-              // Theme Cards List
+              // 1. System Default
+              _buildThemeCard(
+                context: context,
+                ref: ref,
+                currentMode: settings.themeMode,
+                mode: FormaThemeMode.system,
+                title: 'System Default',
+                subtitle: 'Syncs automatically with device OS appearance.',
+                icon: Icons.brightness_auto_rounded,
+                iconColor: tokens.accent,
+                swatchColors: const [Color(0xFFFAF9F6), Color(0xFF05070B), Color(0xFF2563EB)],
+                badgeText: 'Auto Match',
+              ),
+              const SizedBox(height: 10),
+
+              // 2. Modern Studio Light
               _buildThemeCard(
                 context: context,
                 ref: ref,
                 currentMode: settings.themeMode,
                 mode: FormaThemeMode.light,
                 title: 'Modern Studio Light',
-                subtitle: 'Figma-style crisp white on Slate-50 with 1px hairline borders.',
+                subtitle: 'Editorial paper craft, warm background & crisp hairline borders.',
                 icon: Icons.light_mode_rounded,
                 iconColor: const Color(0xFF2563EB),
-                swatchColors: const [Color(0xFFF8FAFC), Color(0xFFFFFFFF), Color(0xFF2563EB)],
-                badgeText: 'Crisp & Daytime',
+                swatchColors: const [Color(0xFFFAF9F6), Color(0xFFFFFFFF), Color(0xFF2563EB)],
+                badgeText: 'Warm Paper',
               ),
               const SizedBox(height: 10),
 
+              // 3. Obsidian Studio Dark
               _buildThemeCard(
                 context: context,
                 ref: ref,
                 currentMode: settings.themeMode,
                 mode: FormaThemeMode.dark,
                 title: 'Obsidian Studio Dark',
-                subtitle: 'Raycast-style deep void black on Slate-900 with specular rim.',
+                subtitle: 'True OLED pitch void, multi-tiered dark surfaces & electric accents.',
                 icon: Icons.dark_mode_rounded,
                 iconColor: const Color(0xFF38BDF8),
-                swatchColors: const [Color(0xFF090D16), Color(0xFF111827), Color(0xFF38BDF8)],
-                badgeText: 'Nighttime Studio',
-              ),
-              const SizedBox(height: 10),
-
-              _buildThemeCard(
-                context: context,
-                ref: ref,
-                currentMode: settings.themeMode,
-                mode: FormaThemeMode.liquidGlass,
-                title: 'Liquid Glass (macOS Sonoma)',
-                subtitle: 'Apple translucent fluid glass with 24px blur and specular top sheen.',
-                icon: Icons.blur_on_rounded,
-                iconColor: const Color(0xFF0284C7),
-                swatchColors: const [Color(0xFFBAE6FD), Color(0xCCFFFFFF), Color(0xFF0284C7)],
-                badgeText: 'Translucent Fluid',
-                requiresPin: true,
-              ),
-              const SizedBox(height: 10),
-
-              _buildThemeCard(
-                context: context,
-                ref: ref,
-                currentMode: settings.themeMode,
-                mode: FormaThemeMode.glassmorphism,
-                title: 'Cosmic Glassmorphism',
-                subtitle: 'Bespoke CSS Glassmorphism with deep space radial nebula.',
-                icon: Icons.auto_awesome_rounded,
-                iconColor: const Color(0xFFFACC15),
-                swatchColors: const [Color(0xFF080D1A), Color(0x24FFFFFF), Color(0xFF818CF8)],
-                badgeText: 'Deep Space Nebula',
+                swatchColors: const [Color(0xFF05070B), Color(0xFF0F1420), Color(0xFF38BDF8)],
+                badgeText: 'True OLED',
               ),
             ],
           ),
@@ -159,48 +145,22 @@ class FormaThemePickerDialog extends ConsumerWidget {
     required Color iconColor,
     required List<Color> swatchColors,
     required String badgeText,
-    bool requiresPin = false,
   }) {
     final isSelected = currentMode == mode;
     final tokens = FormaTheme.tokensOf(context);
 
     return InkWell(
-      onTap: () async {
-        if (requiresPin && mode == FormaThemeMode.liquidGlass) {
-          final pin = await _showPasscodeDialog(context);
-          if (pin == '1111') {
-            ref.read(settingsProvider.notifier).setThemeMode(mode);
-            if (context.mounted) {
-              Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Activated Liquid Glass Theme 💧'),
-                  backgroundColor: FormaColors.liquidGlassCyan,
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            }
-          } else if (pin != null && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Incorrect PIN. Valid PIN is 1111.'),
-                backgroundColor: FormaColors.dangerRed,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
-        } else {
-          ref.read(settingsProvider.notifier).setThemeMode(mode);
-          if (context.mounted) {
-            Navigator.of(context).pop();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Activated $title ✨'),
-                backgroundColor: tokens.accent,
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
+      onTap: () {
+        ref.read(settingsProvider.notifier).setThemeMode(mode);
+        if (context.mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Activated $title ✨'),
+              backgroundColor: tokens.accent,
+              duration: const Duration(seconds: 2),
+            ),
+          );
         }
       },
       borderRadius: BorderRadius.circular(16),
@@ -308,48 +268,6 @@ class FormaThemePickerDialog extends ConsumerWidget {
               ),
           ],
         ),
-      ),
-    );
-  }
-
-  Future<String?> _showPasscodeDialog(BuildContext context) {
-    final controller = TextEditingController(text: '1111');
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Unlock Liquid Glass Mode'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter the experimental PIN code to unlock visionOS translucent liquid glass:',
-              style: TextStyle(fontSize: 12),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                hintText: 'PIN (Default: 1111)',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('Confirm (1111)'),
-          ),
-        ],
       ),
     );
   }
