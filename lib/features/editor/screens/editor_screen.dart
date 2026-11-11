@@ -9,6 +9,8 @@ import 'package:file_picker/file_picker.dart';
 
 import '../../../domain/models/project_model.dart';
 import '../../../domain/models/paint_styles.dart';
+import '../../../domain/models/editor_tab_model.dart';
+import '../../../core/collab/collab_service.dart';
 import '../../../app/theme/forma_colors.dart';
 import '../../../app/theme/neumorphic.dart';
 import '../../../app/theme/liquid_glass.dart';
@@ -23,6 +25,8 @@ import '../../settings/screens/settings_screen.dart';
 import '../controllers/editor_controller.dart';
 import '../controllers/editor_state.dart';
 import '../widgets/canvas/canvas_viewport.dart';
+import '../widgets/canvas/icon_canvas_viewport.dart';
+import '../widgets/tabs/editor_tab_bar.dart';
 import '../widgets/panels/layers_panel.dart';
 import '../widgets/panels/properties_panel.dart';
 import '../widgets/panels/inspector_panel.dart';
@@ -31,6 +35,7 @@ import '../widgets/dialogs/export_dialog.dart';
 import '../widgets/dialogs/color_picker_dialog.dart';
 import '../widgets/dialogs/command_palette.dart';
 import '../widgets/dialogs/manual_zoom_dialog.dart';
+import '../widgets/dialogs/collab_dialog.dart';
 import '../widgets/panels/timeline_panel.dart';
 
 class EditorScreen extends ConsumerStatefulWidget {
@@ -48,10 +53,25 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
   bool _showPropertiesSheet = false;
   bool _leftSidebarOpen = true;
   bool _rightSidebarOpen = true;
+  late List<EditorTab> _tabs;
+  String _activeTabId = 'main-canvas';
+
+  EditorTab get _activeTab => _tabs.firstWhere(
+        (t) => t.id == _activeTabId,
+        orElse: () => _tabs.isNotEmpty ? _tabs.first : EditorTab.mainCanvas(),
+      );
 
   @override
   void initState() {
     super.initState();
+    _tabs = [
+      EditorTab.mainCanvas(
+        id: 'main-canvas',
+        title: widget.project.pages.isNotEmpty
+            ? widget.project.pages.first.name
+            : 'Main Artboard',
+      ),
+    ];
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusNode.requestFocus();
@@ -517,6 +537,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                 );
                 final isDesktop = layoutType == DeviceLayoutType.tabletOrDesktop;
 
+                final activePage = state.project.getPage(state.activePageId);
+                if (_tabs.isNotEmpty &&
+                    _tabs.first.isMainCanvas &&
+                    activePage != null &&
+                    _tabs.first.title != activePage.name) {
+                  _tabs[0] = _tabs[0].copyWith(title: activePage.name);
+                }
+
                 return Column(
                   children: [
                     // --- TOP BAR WITH BREADCRUMBS ---
@@ -529,9 +557,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                       isDark,
                       isGlass,
                     ),
-
-                    // --- PAGES & CANVASES TAB BAR ---
-                    _buildPagesTabBar(context, state, controller, tokens, isDark, isGlass),
 
                     // --- MAIN EDITOR WORKSPACE ---
                     Expanded(
@@ -561,10 +586,49 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                                   children: [
                                     Column(
                                       children: [
-                                        Expanded(
-                                          child: CanvasViewport(project: widget.project),
+                                        // Sleek EditorTabBar directly above the canvas viewport
+                                        EditorTabBar(
+                                          tabs: _tabs,
+                                          activeTabId: _activeTabId,
+                                          onTabSelected: (tab) => setState(() => _activeTabId = tab.id),
+                                          onTabClosed: (tab) => setState(() {
+                                            _tabs.removeWhere((t) => t.id == tab.id);
+                                            if (_activeTabId == tab.id) {
+                                              _activeTabId = _tabs.isNotEmpty ? _tabs.last.id : 'main-canvas';
+                                            }
+                                          }),
+                                          onNewIconCanvasWithSize: (sz) => setState(() {
+                                            final t = EditorTab.iconCanvas(iconSize: sz);
+                                            _tabs.add(t);
+                                            _activeTabId = t.id;
+                                          }),
+                                          onTabRenamed: (renamed) => setState(() {
+                                            final idx = _tabs.indexWhere((t) => t.id == renamed.id);
+                                            if (idx != -1) _tabs[idx] = renamed;
+                                          }),
                                         ),
-                                        if (state.showTimelinePanel)
+                                        Expanded(
+                                          child: _activeTab.isIconCanvas
+                                              ? IconCanvasViewport(
+                                                  tab: _activeTab,
+                                                  project: widget.project,
+                                                  onTabChanged: (u) {
+                                                    final idx = _tabs.indexWhere((t) => t.id == u.id);
+                                                    if (idx != -1) {
+                                                      _tabs[idx] = u;
+                                                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                                                        if (mounted) setState(() {});
+                                                      });
+                                                    }
+                                                  },
+                                                  onClose: () => setState(() {
+                                                    _tabs.removeWhere((t) => t.id == _activeTab.id);
+                                                    _activeTabId = _tabs.isNotEmpty ? _tabs.last.id : 'main-canvas';
+                                                  }),
+                                                )
+                                              : CanvasViewport(project: widget.project),
+                                        ),
+                                        if (state.showTimelinePanel && !_activeTab.isIconCanvas)
                                           TimelinePanel(
                                             timeline: state.timeline,
                                             currentTimeMs: state.currentTimelineMs,
@@ -585,8 +649,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                                       ],
                                     ),
 
-                                    // PC Desktop: Floating Bottom Canvas Toolbar
-                                    if (isDesktop)
+                                    // PC Desktop: Floating Bottom Canvas Toolbar (Active on main canvas)
+                                    if (isDesktop && !_activeTab.isIconCanvas)
                                       Positioned(
                                         bottom: 22,
                                         left: 0,
@@ -933,6 +997,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                 ),
                 const SizedBox(width: 6),
 
+                // Real-time Collaboration / Share Button
+                _buildCollabButton(context, tokens, isDark, isDesktop),
+                const SizedBox(width: 6),
+
                 if (isDesktop) ...[
                   // Settings Button
                   NeuIconButton(
@@ -1000,86 +1068,151 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
     return barContent;
   }
 
-  Widget _buildPagesTabBar(
+  Widget _buildCollabButton(
     BuildContext context,
-    dynamic state,
-    EditorController controller,
     FormaThemeTokens tokens,
     bool isDark,
-    bool isGlass,
+    bool isDesktop,
   ) {
-    final pages = state.project.pages;
-    return Container(
-      height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: tokens.wellBg,
-        border: Border(
-          bottom: BorderSide(
-            color: tokens.borderSubtle,
-            width: 1.0,
+    final session = ref.watch(activeCollabSessionProvider);
+    final collaborators = ref.watch(activeCollaboratorsProvider);
+    final isConnected = session != null && session.isConnected;
+
+    if (isConnected) {
+      return Tooltip(
+        message: 'Active Collab Room #${session.roomId} (${collaborators.length} online)',
+        child: InkWell(
+          onTap: () => showDialog(
+            context: context,
+            builder: (_) => const CollabDialog(),
           ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.tab_rounded, size: 14, color: tokens.accent),
-          const SizedBox(width: 6),
-          Expanded(
-            child: ListView(
-              scrollDirection: Axis.horizontal,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            height: 34,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: tokens.accent.withValues(alpha: isDark ? 0.20 : 0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: tokens.accent.withValues(alpha: isDark ? 0.45 : 0.30),
+                width: 1.0,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                for (final page in pages) ...[
-                  InkWell(
-                    onTap: () => controller.switchPage(page.id),
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: page.id == state.activePageId
-                            ? tokens.accent.withValues(alpha: isDark ? 0.25 : 0.12)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6),
-                        border: page.id == state.activePageId
-                            ? Border.all(color: tokens.accent, width: 1.0)
-                            : null,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            page.name,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: page.id == state.activePageId ? FontWeight.bold : FontWeight.w500,
-                              color: page.id == state.activePageId ? tokens.accent : tokens.textMuted,
+                // Live emerald presence pulse
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF10B981),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // Overlapping Avatar Circles
+                if (collaborators.isNotEmpty) ...[
+                  SizedBox(
+                    height: 22,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (int i = 0; i < math.min(3, collaborators.length); i++) ...[
+                          Align(
+                            widthFactor: 0.72,
+                            child: Container(
+                              width: 20,
+                              height: 20,
+                              decoration: BoxDecoration(
+                                color: collaborators[i].color,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: tokens.surface, width: 1.5),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  collaborators[i].initials,
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                          if (pages.length > 1 && page.id == state.activePageId) ...[
-                            const SizedBox(width: 4),
-                            GestureDetector(
-                              onTap: () => controller.deletePage(page.id),
-                              child: Icon(Icons.close_rounded, size: 12, color: tokens.textMuted),
-                            ),
-                          ],
                         ],
-                      ),
+                        if (collaborators.length > 3) ...[
+                          Align(
+                            widthFactor: 0.72,
+                            child: Container(
+                              width: 20,
+                              height: 20,
+                              decoration: BoxDecoration(
+                                color: tokens.textMuted,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: tokens.surface, width: 1.5),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '+${collaborators.length - 3}',
+                                  style: const TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
+                  const SizedBox(width: 6),
                 ],
+                Text(
+                  '#${session.roomId}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    color: tokens.accent,
+                  ),
+                ),
               ],
             ),
           ),
-          IconButton(
-            icon: Icon(Icons.add_rounded, size: 16, color: tokens.textMuted),
-            tooltip: 'Add Canvas Page Tab',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-            onPressed: () {
-              controller.addPage('Canvas ${pages.length + 1}');
-            },
+        ),
+      );
+    }
+
+    return NeuButton(
+      padding: EdgeInsets.symmetric(horizontal: isDesktop ? 10 : 8, vertical: 6),
+      onPressed: () => showDialog(
+        context: context,
+        builder: (_) => const CollabDialog(),
+      ),
+      tooltip: 'Real-time Live Collaboration & Room Sharing',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.group_add_outlined,
+            size: 15,
+            color: tokens.accent,
           ),
+          if (isDesktop) ...[
+            const SizedBox(width: 5),
+            Text(
+              'Share',
+              style: TextStyle(
+                color: tokens.textMain,
+                fontSize: 11.5,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
         ],
       ),
     );
