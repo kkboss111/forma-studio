@@ -15,26 +15,36 @@ import '../../../../domain/models/layout_config.dart';
 import '../../../../domain/models/constraints.dart';
 import '../../../../domain/models/text_data.dart';
 import '../../../../domain/services/node_render_service.dart';
-import '../../../../app/theme/forma_colors.dart';
 import '../../../../app/theme/forma_theme.dart';
-import '../../../../app/theme/neumorphic.dart';
 import '../../../../app/theme/touch_controls.dart';
 import '../../../settings/models/app_settings.dart';
 import '../../controllers/editor_controller.dart';
+import '../../controllers/editor_state.dart';
 import '../dialogs/color_picker_dialog.dart';
 import '../dialogs/image_editor_dialog.dart';
+import '../dialogs/export_dialog.dart';
 import '../canvas/canvas_viewport.dart';
 
-class PropertiesPanel extends ConsumerWidget {
+class PropertiesPanel extends ConsumerStatefulWidget {
   final ProjectModel project;
   final double? width;
 
   const PropertiesPanel({super.key, required this.project, this.width = 280});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(editorControllerProvider(project));
-    final controller = ref.read(editorControllerProvider(project).notifier);
+  ConsumerState<PropertiesPanel> createState() => _PropertiesPanelState();
+}
+
+class _PropertiesPanelState extends ConsumerState<PropertiesPanel> {
+  bool _aspectRatioLocked = false;
+  String _selectedExportFormat = 'PNG';
+  String _selectedExportScale = '2x';
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(editorControllerProvider(widget.project));
+    final controller = ref.read(editorControllerProvider(widget.project).notifier);
+    final settings = ref.watch(settingsProvider);
     final tokens = FormaTheme.tokensOf(context);
     final isDark = tokens.isDark;
 
@@ -44,7 +54,7 @@ class PropertiesPanel extends ConsumerWidget {
         : null;
 
     Widget panel = Container(
-      width: width,
+      width: widget.width,
       decoration: BoxDecoration(
         color: tokens.surface,
         border: Border(
@@ -55,29 +65,25 @@ class PropertiesPanel extends ConsumerWidget {
         ),
       ),
       child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         children: [
           if (primaryNode == null) ...[
-            // Page Settings
-            _buildPageSettings(context, state, controller, isDark, ref),
+            // Canvas / Page Settings
+            _buildPageSettings(context, state, controller, settings, tokens, isDark),
           ] else ...[
-            // Alignment Bar
-            _buildAlignmentBar(controller, isDark),
-            const SizedBox(height: 14),
+            // Alignment Grid Section
+            _buildAlignmentSection(controller, tokens, isDark),
 
-            // Geometry Section (X, Y, W, H, Rotation)
-            _buildGeometrySection(context, primaryNode, controller, isDark),
-            const Divider(height: 24),
+            // Geometry Section (Position, Dimensions, Rotation, Radius, Opacity)
+            _buildGeometrySection(context, primaryNode, controller, tokens, isDark),
 
             // Constraints Section
-            _buildConstraintsSection(context, primaryNode, controller, isDark),
-            const Divider(height: 24),
+            _buildConstraintsSection(context, primaryNode, controller, tokens, isDark),
 
             // Auto-Layout Section (Frames/Containers)
             if (primaryNode.type == NodeType.frame ||
                 primaryNode.type == NodeType.annotationSection) ...[
-              _buildAutoLayoutSection(context, primaryNode, controller, isDark),
-              const Divider(height: 24),
+              _buildAutoLayoutSection(context, primaryNode, controller, tokens, isDark),
             ],
 
             // Typography Section (If Text Node)
@@ -86,28 +92,28 @@ class PropertiesPanel extends ConsumerWidget {
               TypographyPropertySection(
                 node: primaryNode,
                 controller: controller,
+                tokens: tokens,
                 isDark: isDark,
               ),
-              const Divider(height: 24),
             ],
 
             // Fills Section
-            _buildFillsSection(context, primaryNode, controller, isDark),
-            const Divider(height: 24),
+            _buildFillsSection(context, primaryNode, controller, tokens, isDark),
 
             // Strokes Section
-            _buildStrokesSection(context, primaryNode, controller, isDark),
-            const Divider(height: 24),
+            _buildStrokesSection(context, primaryNode, controller, tokens, isDark),
 
             // Effects Section
-            _buildEffectsSection(context, primaryNode, controller, isDark),
-            const Divider(height: 24),
+            _buildEffectsSection(context, primaryNode, controller, tokens, isDark),
 
             // Vector Path / Pencil Draw Section
             if (primaryNode.type == NodeType.vectorPath ||
                 primaryNode.type == NodeType.freehandPath) ...[
-              _buildVectorPathSection(context, primaryNode, controller, isDark),
+              _buildVectorPathSection(context, primaryNode, controller, tokens, isDark),
             ],
+
+            // Export Section
+            _buildExportSection(context, primaryNode, state, tokens, isDark),
           ],
         ],
       ),
@@ -125,330 +131,87 @@ class PropertiesPanel extends ConsumerWidget {
     return panel;
   }
 
-  Widget _buildVectorPathSection(
-    BuildContext context,
-    DesignNode node,
+  Widget _buildAlignmentSection(
     EditorController controller,
+    FormaThemeTokens tokens,
     bool isDark,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('VECTOR CONTROLS', isDark),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: FormaColors.primaryBlue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            icon: const Icon(Icons.polyline_rounded, size: 18),
-            label: const Text(
-              'Edit Vector Path',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-            ),
-            onPressed: () => controller.enterVectorEditMode(node.id),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPageSettings(
-    BuildContext context,
-    dynamic state,
-    EditorController controller,
-    bool isDark,
-    WidgetRef ref,
-  ) {
-    final page = state.project.getPage(state.activePageId);
-    if (page == null) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('CANVAS SETTINGS', isDark),
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Background Color',
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark
-                    ? FormaColors.darkTextMain
-                    : FormaColors.lightTextMain,
-              ),
-            ),
-            GestureDetector(
-              onTap: () {
-                ColorPickerDialog.show(
-                  context,
-                  initialColor: page.backgroundColor,
-                  onColorChanged: (c) => controller.setPageBackgroundColor(c),
-                );
-              },
-              child: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: page.backgroundColor,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.black12),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            const Color(0xFFFFFFFF),
-            const Color(0xFFF1F5F9),
-            const Color(0xFFE2E8F0),
-            const Color(0xFF0F172A),
-            const Color(0xFF1E293B),
-            const Color(0xFF000000),
-            const Color(0xFFFEF3C7),
-            const Color(0xFFEFF6FF),
-          ].map((c) {
-            final isSelected = page.backgroundColor.toARGB32() == c.toARGB32();
-            return GestureDetector(
-              onTap: () => controller.setPageBackgroundColor(c),
-              child: Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: c,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSelected ? FormaColors.primaryBlue : Colors.black26,
-                    width: isSelected ? 2.5 : 1.0,
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Show Grid',
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark
-                    ? FormaColors.darkTextMain
-                    : FormaColors.lightTextMain,
-              ),
-            ),
-            Switch(
-              value: page.showGrid,
-              activeThumbColor: FormaColors.primaryBlue,
-              onChanged: (val) {
-                controller.setPageShowGrid(val);
-                ref.read(settingsProvider.notifier).toggleShowGrid(val);
-              },
-            ),
-          ],
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Snap to Grid',
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark
-                    ? FormaColors.darkTextMain
-                    : FormaColors.lightTextMain,
-              ),
-            ),
-            Switch(
-              value: page.snapToGrid,
-              activeThumbColor: FormaColors.primaryBlue,
-              onChanged: (val) {
-                controller.setPageSnapToGrid(val);
-                ref.read(settingsProvider.notifier).toggleSnapToGrid(val);
-              },
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAlignmentBar(EditorController controller, bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('ALIGN & DISTRIBUTE', isDark),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            NeuIconButton(
+    return PropertySectionCard(
+      title: 'ALIGNMENT',
+      icon: Icons.align_horizontal_center_rounded,
+      tokens: tokens,
+      isDark: isDark,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildMicroIconButton(
               icon: Icons.align_horizontal_left_rounded,
-              size: 28,
-              iconSize: 15,
               tooltip: 'Align Left',
-              onPressed: () => controller.alignSelection('left'),
+              tokens: tokens,
+              onTap: () => controller.alignSelection('left'),
             ),
-            NeuIconButton(
+          ),
+          Expanded(
+            child: _buildMicroIconButton(
               icon: Icons.align_horizontal_center_rounded,
-              size: 28,
-              iconSize: 15,
               tooltip: 'Align Center Horizontal',
-              onPressed: () => controller.alignSelection('centerHorizontal'),
+              tokens: tokens,
+              onTap: () => controller.alignSelection('centerHorizontal'),
             ),
-            NeuIconButton(
+          ),
+          Expanded(
+            child: _buildMicroIconButton(
               icon: Icons.align_horizontal_right_rounded,
-              size: 28,
-              iconSize: 15,
               tooltip: 'Align Right',
-              onPressed: () => controller.alignSelection('right'),
+              tokens: tokens,
+              onTap: () => controller.alignSelection('right'),
             ),
-            NeuIconButton(
+          ),
+          Container(width: 1, height: 16, margin: const EdgeInsets.symmetric(horizontal: 2), color: tokens.borderSubtle),
+          Expanded(
+            child: _buildMicroIconButton(
               icon: Icons.align_vertical_top_rounded,
-              size: 28,
-              iconSize: 15,
               tooltip: 'Align Top',
-              onPressed: () => controller.alignSelection('top'),
+              tokens: tokens,
+              onTap: () => controller.alignSelection('top'),
             ),
-            NeuIconButton(
+          ),
+          Expanded(
+            child: _buildMicroIconButton(
               icon: Icons.align_vertical_center_rounded,
-              size: 28,
-              iconSize: 15,
               tooltip: 'Align Center Vertical',
-              onPressed: () => controller.alignSelection('centerVertical'),
+              tokens: tokens,
+              onTap: () => controller.alignSelection('centerVertical'),
             ),
-            NeuIconButton(
+          ),
+          Expanded(
+            child: _buildMicroIconButton(
               icon: Icons.align_vertical_bottom_rounded,
-              size: 28,
-              iconSize: 15,
               tooltip: 'Align Bottom',
-              onPressed: () => controller.alignSelection('bottom'),
+              tokens: tokens,
+              onTap: () => controller.alignSelection('bottom'),
             ),
-            NeuIconButton(
+          ),
+          Container(width: 1, height: 16, margin: const EdgeInsets.symmetric(horizontal: 2), color: tokens.borderSubtle),
+          Expanded(
+            child: _buildMicroIconButton(
               icon: Icons.horizontal_distribute_rounded,
-              size: 28,
-              iconSize: 15,
               tooltip: 'Distribute Horizontal',
-              onPressed: () => controller.distributeSelection('horizontal'),
+              tokens: tokens,
+              onTap: () => controller.distributeSelection('horizontal'),
             ),
-            NeuIconButton(
+          ),
+          Expanded(
+            child: _buildMicroIconButton(
               icon: Icons.vertical_distribute_rounded,
-              size: 28,
-              iconSize: 15,
               tooltip: 'Distribute Vertical',
-              onPressed: () => controller.distributeSelection('vertical'),
+              tokens: tokens,
+              onTap: () => controller.distributeSelection('vertical'),
             ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'MATCH SIZE',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
-                color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-              ),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                NeuIconButton(
-                  icon: Icons.sync_alt_rounded,
-                  size: 26,
-                  iconSize: 14,
-                  tooltip: 'Match Width',
-                  onPressed: () => controller.matchSelectionDimensions('sameWidth'),
-                ),
-                const SizedBox(width: 4),
-                NeuIconButton(
-                  icon: Icons.height_rounded,
-                  size: 26,
-                  iconSize: 14,
-                  tooltip: 'Match Height',
-                  onPressed: () => controller.matchSelectionDimensions('sameHeight'),
-                ),
-                const SizedBox(width: 4),
-                NeuIconButton(
-                  icon: Icons.aspect_ratio_rounded,
-                  size: 26,
-                  iconSize: 14,
-                  tooltip: 'Make Square Aspect',
-                  onPressed: () => controller.matchSelectionDimensions('makeSquare'),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'LAYER LEVEL',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
-                color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-              ),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                NeuIconButton(
-                  icon: Icons.vertical_align_top_rounded,
-                  size: 26,
-                  iconSize: 14,
-                  tooltip: 'Bring to Front',
-                  onPressed: controller.bringToFront,
-                ),
-                const SizedBox(width: 4),
-                NeuIconButton(
-                  icon: Icons.arrow_upward_rounded,
-                  size: 26,
-                  iconSize: 14,
-                  tooltip: 'Bring Forward',
-                  onPressed: controller.bringForward,
-                ),
-                const SizedBox(width: 4),
-                NeuIconButton(
-                  icon: Icons.arrow_downward_rounded,
-                  size: 26,
-                  iconSize: 14,
-                  tooltip: 'Send Backward',
-                  onPressed: controller.sendBackward,
-                ),
-                const SizedBox(width: 4),
-                NeuIconButton(
-                  icon: Icons.vertical_align_bottom_rounded,
-                  size: 26,
-                  iconSize: 14,
-                  tooltip: 'Send to Back',
-                  onPressed: controller.sendToBack,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -456,235 +219,247 @@ class PropertiesPanel extends ConsumerWidget {
     BuildContext context,
     DesignNode node,
     EditorController controller,
+    FormaThemeTokens tokens,
     bool isDark,
   ) {
-    final tokens = FormaTheme.tokensOf(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('GEOMETRY', isDark),
-        const SizedBox(height: 12),
-        // Row 1: Position X and Y
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: tokens.wellBg,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: tokens.borderSubtle),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return PropertySectionCard(
+      title: 'GEOMETRY',
+      icon: Icons.straighten_rounded,
+      tokens: tokens,
+      isDark: isDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row 1: Position X and Y
+          Row(
             children: [
-              Text('POSITION (CANVAS COORD)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted)),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: FormaTouchNudgeField(
-                      label: 'X',
-                      value: node.x,
-                      onChanged: (val) => controller.updateNode(node.copyWith(x: val)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FormaTouchNudgeField(
-                      label: 'Y',
-                      value: node.y,
-                      onChanged: (val) => controller.updateNode(node.copyWith(y: val)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Row 2: Dimensions Width and Height
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: tokens.wellBg,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: tokens.borderSubtle),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('SIZE (BOUNDING BOX)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted)),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: FormaTouchNudgeField(
-                      label: 'W',
-                      value: node.width,
-                      min: 1,
-                      onChanged: (val) => controller.updateNode(
-                        node.copyWith(width: math.max(1, val)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FormaTouchNudgeField(
-                      label: 'H',
-                      value: node.height,
-                      min: 1,
-                      onChanged: (val) => controller.updateNode(
-                        node.copyWith(height: math.max(1, val)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Row 3: Rotation and Corner Radius
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: tokens.wellBg,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: tokens.borderSubtle),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('ROTATION & RADIUS', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted)),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: FormaTouchNudgeField(
-                      label: 'R°',
-                      value: node.rotation,
-                      onChanged: (val) =>
-                          controller.updateNode(node.copyWith(rotation: val)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FormaTouchNudgeField(
-                      label: 'Rad',
-                      value: node.cornerRadii.uniformValue,
-                      min: 0,
-                      onChanged: (val) => controller.updateNode(
-                        node.copyWith(cornerRadii: CornerRadii.all(val)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        // Touch-first Opacity slider
-        FormaTouchSlider(
-          label: 'OPACITY',
-          value: (node.opacity * 100.0).roundToDouble(),
-          min: 0,
-          max: 100,
-          step: 5,
-          unit: '%',
-          onChanged: (val) {
-            controller.updateNode(
-              node.copyWith(opacity: (val / 100.0).clamp(0.0, 1.0)),
-            );
-          },
-        ),
-        if (node.type == NodeType.polygon) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      node.polygonSides == 3 ? 'TRIANGLE CORNERS' : 'POLYGON SIDES',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-                      ),
-                    ),
-                    Text(
-                      '${node.polygonSides} corners',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: FormaColors.primaryBlue,
-                      ),
-                    ),
-                  ],
+              Expanded(
+                child: FormaTouchNudgeField(
+                  label: 'X',
+                  value: node.x,
+                  onChanged: (val) => controller.updateNode(node.copyWith(x: val)),
                 ),
-                Slider(
-                  value: node.polygonSides.toDouble().clamp(3.0, 12.0),
-                  min: 3,
-                  max: 12,
-                  divisions: 9,
-                  label: '${node.polygonSides}',
-                  activeColor: FormaColors.primaryBlue,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FormaTouchNudgeField(
+                  label: 'Y',
+                  value: node.y,
+                  onChanged: (val) => controller.updateNode(node.copyWith(y: val)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Row 2: Dimensions Width, Height and Aspect Ratio Lock
+          Row(
+            children: [
+              Expanded(
+                child: FormaTouchNudgeField(
+                  label: 'W',
+                  value: node.width,
+                  min: 1,
                   onChanged: (val) {
-                    controller.updateNode(
-                      node.copyWith(polygonSides: val.toInt()),
-                    );
+                    final newW = math.max(1.0, val);
+                    if (_aspectRatioLocked && node.width > 0) {
+                      final ratio = node.height / node.width;
+                      controller.updateNode(
+                        node.copyWith(
+                          width: newW,
+                          height: math.max(1.0, newW * ratio),
+                        ),
+                      );
+                    } else {
+                      controller.updateNode(node.copyWith(width: newW));
+                    }
                   },
                 ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'CORNER FILLET RADIUS',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+              ),
+              // Aspect Ratio Lock Button
+              Tooltip(
+                message: _aspectRatioLocked ? 'Unlock Aspect Ratio' : 'Lock Aspect Ratio',
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _aspectRatioLocked = !_aspectRatioLocked;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    width: 28,
+                    height: 42,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: _aspectRatioLocked
+                          ? tokens.accent.withValues(alpha: isDark ? 0.20 : 0.12)
+                          : tokens.wellBg,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _aspectRatioLocked
+                            ? tokens.accent.withValues(alpha: isDark ? 0.6 : 0.4)
+                            : tokens.borderSubtle,
+                        width: 1.0,
                       ),
                     ),
-                    Text(
-                      '${node.cornerRadii.uniformValue.toInt()} px',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: FormaColors.primaryBlue,
+                    child: Center(
+                      child: Icon(
+                        _aspectRatioLocked ? Icons.lock_rounded : Icons.lock_open_rounded,
+                        size: 14,
+                        color: _aspectRatioLocked ? tokens.accent : tokens.textMuted,
                       ),
                     ),
-                  ],
+                  ),
                 ),
-                Slider(
-                  value: node.cornerRadii.uniformValue.clamp(0.0, 50.0),
+              ),
+              Expanded(
+                child: FormaTouchNudgeField(
+                  label: 'H',
+                  value: node.height,
+                  min: 1,
+                  onChanged: (val) {
+                    final newH = math.max(1.0, val);
+                    if (_aspectRatioLocked && node.height > 0) {
+                      final ratio = node.width / node.height;
+                      controller.updateNode(
+                        node.copyWith(
+                          height: newH,
+                          width: math.max(1.0, newH * ratio),
+                        ),
+                      );
+                    } else {
+                      controller.updateNode(node.copyWith(height: newH));
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Row 3: Rotation & Corner Radius
+          Row(
+            children: [
+              Expanded(
+                child: FormaTouchNudgeField(
+                  label: 'R°',
+                  value: node.rotation,
+                  onChanged: (val) => controller.updateNode(node.copyWith(rotation: val)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FormaTouchNudgeField(
+                  label: 'Rad',
+                  value: node.cornerRadii.uniformValue,
                   min: 0,
-                  max: 50,
-                  divisions: 50,
-                  label: '${node.cornerRadii.uniformValue.toInt()}',
-                  activeColor: FormaColors.primaryBlue,
-                  onChanged: (val) {
-                    controller.updateNode(
-                      node.copyWith(
-                        cornerRadii: CornerRadii.all(val),
-                      ),
-                    );
-                  },
+                  onChanged: (val) => controller.updateNode(
+                    node.copyWith(cornerRadii: CornerRadii.all(val)),
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+          const SizedBox(height: 8),
+
+          // Flip Transformation Actions Row
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionPill(
+                  label: 'Flip Horizontal',
+                  icon: Icons.flip_rounded,
+                  tokens: tokens,
+                  onTap: () => controller.flipHorizontalSelected(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildActionPill(
+                  label: 'Flip Vertical',
+                  icon: Icons.swap_vertical_circle_outlined,
+                  tokens: tokens,
+                  onTap: () => controller.flipVerticalSelected(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Opacity Slider
+          FormaTouchSlider(
+            label: 'OPACITY',
+            value: (node.opacity * 100.0).roundToDouble(),
+            min: 0,
+            max: 100,
+            step: 5,
+            unit: '%',
+            activeColor: tokens.accent,
+            onChanged: (val) {
+              controller.updateNode(
+                node.copyWith(opacity: (val / 100.0).clamp(0.0, 1.0)),
+              );
+            },
+          ),
+
+          // Polygon / Star Corner Options
+          if (node.type == NodeType.polygon) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: tokens.wellBg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: tokens.borderSubtle, width: 1.0),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        node.polygonSides == 3 ? 'TRIANGLE CORNERS' : 'POLYGON SIDES',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: tokens.textMuted,
+                        ),
+                      ),
+                      Text(
+                        '${node.polygonSides} sides',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: tokens.accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 4,
+                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                    ),
+                    child: Slider(
+                      value: node.polygonSides.toDouble().clamp(3.0, 12.0),
+                      min: 3,
+                      max: 12,
+                      divisions: 9,
+                      activeColor: tokens.accent,
+                      onChanged: (val) {
+                        controller.updateNode(
+                          node.copyWith(polygonSides: val.toInt()),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 
@@ -692,94 +467,66 @@ class PropertiesPanel extends ConsumerWidget {
     BuildContext context,
     DesignNode node,
     EditorController controller,
+    FormaThemeTokens tokens,
     bool isDark,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('CONSTRAINTS', isDark),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Horizontal',
-              style: TextStyle(
-                fontSize: 11,
-                color: isDark
-                    ? FormaColors.darkTextMuted
-                    : FormaColors.lightTextMuted,
-              ),
-            ),
-            DropdownButton<HorizontalConstraint>(
-              value: node.constraints.horizontal,
-              isDense: true,
-              underline: const SizedBox.shrink(),
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark
-                    ? FormaColors.darkTextMain
-                    : FormaColors.lightTextMain,
-              ),
-              items: HorizontalConstraint.values.map((c) {
-                return DropdownMenuItem(
-                  value: c,
-                  child: Text(c.name.toUpperCase()),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) {
-                  controller.updateNode(
-                    node.copyWith(
-                      constraints: node.constraints.copyWith(horizontal: val),
-                    ),
-                  );
-                }
-              },
-            ),
-          ],
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Vertical',
-              style: TextStyle(
-                fontSize: 11,
-                color: isDark
-                    ? FormaColors.darkTextMuted
-                    : FormaColors.lightTextMuted,
-              ),
-            ),
-            DropdownButton<VerticalConstraint>(
-              value: node.constraints.vertical,
-              isDense: true,
-              underline: const SizedBox.shrink(),
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark
-                    ? FormaColors.darkTextMain
-                    : FormaColors.lightTextMain,
-              ),
-              items: VerticalConstraint.values.map((c) {
-                return DropdownMenuItem(
-                  value: c,
-                  child: Text(c.name.toUpperCase()),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) {
-                  controller.updateNode(
-                    node.copyWith(
-                      constraints: node.constraints.copyWith(vertical: val),
-                    ),
-                  );
-                }
-              },
-            ),
-          ],
-        ),
-      ],
+    return PropertySectionCard(
+      title: 'CONSTRAINTS',
+      icon: Icons.filter_center_focus_rounded,
+      tokens: tokens,
+      isDark: isDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Horizontal',
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: tokens.textMuted),
+          ),
+          const SizedBox(height: 4),
+          _buildSegmentedConstraintPill<HorizontalConstraint>(
+            currentValue: node.constraints.horizontal,
+            values: const [
+              HorizontalConstraint.left,
+              HorizontalConstraint.center,
+              HorizontalConstraint.right,
+              HorizontalConstraint.scale,
+            ],
+            labelBuilder: (c) => c.name.toUpperCase(),
+            tokens: tokens,
+            onSelected: (val) {
+              controller.updateNode(
+                node.copyWith(
+                  constraints: node.constraints.copyWith(horizontal: val),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Vertical',
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: tokens.textMuted),
+          ),
+          const SizedBox(height: 4),
+          _buildSegmentedConstraintPill<VerticalConstraint>(
+            currentValue: node.constraints.vertical,
+            values: const [
+              VerticalConstraint.top,
+              VerticalConstraint.center,
+              VerticalConstraint.bottom,
+              VerticalConstraint.scale,
+            ],
+            labelBuilder: (c) => c.name.toUpperCase(),
+            tokens: tokens,
+            onSelected: (val) {
+              controller.updateNode(
+                node.copyWith(
+                  constraints: node.constraints.copyWith(vertical: val),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -787,94 +534,1230 @@ class PropertiesPanel extends ConsumerWidget {
     BuildContext context,
     DesignNode node,
     EditorController controller,
+    FormaThemeTokens tokens,
     bool isDark,
   ) {
     final cfg = node.layoutConfig;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return PropertySectionCard(
+      title: 'AUTO-LAYOUT',
+      icon: Icons.view_quilt_outlined,
+      tokens: tokens,
+      isDark: isDark,
+      trailing: Transform.scale(
+        scale: 0.8,
+        child: Switch(
+          value: cfg.enabled,
+          activeThumbColor: tokens.accent,
+          activeTrackColor: tokens.accent.withValues(alpha: 0.3),
+          onChanged: (val) {
+            controller.updateNode(
+              node.copyWith(layoutConfig: cfg.copyWith(enabled: val)),
+            );
+          },
+        ),
+      ),
+      child: cfg.enabled
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Direction Segmented Pill (Row vs Column)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildDirectionOption(
+                        label: 'Horizontal (Row)',
+                        icon: Icons.view_column_rounded,
+                        isSelected: cfg.direction == AutoLayoutDirection.horizontal,
+                        tokens: tokens,
+                        onTap: () {
+                          controller.updateNode(
+                            node.copyWith(
+                              layoutConfig: cfg.copyWith(
+                                direction: AutoLayoutDirection.horizontal,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildDirectionOption(
+                        label: 'Vertical (Column)',
+                        icon: Icons.table_rows_rounded,
+                        isSelected: cfg.direction == AutoLayoutDirection.vertical,
+                        tokens: tokens,
+                        onTap: () {
+                          controller.updateNode(
+                            node.copyWith(
+                              layoutConfig: cfg.copyWith(
+                                direction: AutoLayoutDirection.vertical,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                // Gap and Padding Fields
+                Row(
+                  children: [
+                    Expanded(
+                      child: FormaTouchNudgeField(
+                        label: 'Gap',
+                        value: cfg.gap,
+                        min: 0,
+                        onChanged: (val) {
+                          controller.updateNode(
+                            node.copyWith(layoutConfig: cfg.copyWith(gap: val)),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FormaTouchNudgeField(
+                        label: 'Pad',
+                        value: cfg.paddingLeft,
+                        min: 0,
+                        onChanged: (val) {
+                          controller.updateNode(
+                            node.copyWith(
+                              layoutConfig: cfg.copyWith(
+                                paddingLeft: val,
+                                paddingTop: val,
+                                paddingRight: val,
+                                paddingBottom: val,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : Text(
+              'Enable auto-layout to automatically manage nested element flow and spacing.',
+              style: TextStyle(fontSize: 11, color: tokens.textMuted),
+            ),
+    );
+  }
+
+  Widget _buildDirectionOption({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required FormaThemeTokens tokens,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? tokens.accent.withValues(alpha: tokens.isDark ? 0.22 : 0.12)
+              : tokens.wellBg,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? tokens.accent : tokens.borderSubtle,
+            width: 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _buildSectionTitle('AUTO-LAYOUT', isDark),
-            Switch(
-              value: cfg.enabled,
-              activeThumbColor: FormaColors.primaryBlue,
-              onChanged: (val) {
-                controller.updateNode(
-                  node.copyWith(layoutConfig: cfg.copyWith(enabled: val)),
-                );
-              },
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? tokens.accent : tokens.textMuted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? tokens.accent : tokens.textMuted,
+              ),
             ),
           ],
         ),
-        if (cfg.enabled) ...[
-          const SizedBox(height: 8),
+      ),
+    );
+  }
+
+  Widget _buildFillsSection(
+    BuildContext context,
+    DesignNode node,
+    EditorController controller,
+    FormaThemeTokens tokens,
+    bool isDark,
+  ) {
+    return PropertySectionCard(
+      title: 'FILLS',
+      icon: Icons.format_color_fill_rounded,
+      tokens: tokens,
+      isDark: isDark,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildMiniHeaderButton(
+            icon: Icons.image_outlined,
+            tooltip: 'Add Image Fill',
+            tokens: tokens,
+            onTap: () => _pickImageFill(context, node, null, controller),
+          ),
+          const SizedBox(width: 4),
+          _buildMiniHeaderButton(
+            icon: Icons.add_rounded,
+            tooltip: 'Add Color Fill',
+            tokens: tokens,
+            onTap: () {
+              controller.updateNode(
+                node.copyWith(
+                  fills: [
+                    ...node.fills,
+                    const DesignFill.solid(Color(0xFF3B82F6)),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      child: node.fills.isEmpty
+          ? Text('No fills applied', style: TextStyle(fontSize: 11, color: tokens.textMuted))
+          : Column(
+              children: node.fills.asMap().entries.map((entry) {
+                final i = entry.key;
+                final fill = entry.value;
+
+                String typeBadge = 'SOLID';
+                if (fill.type == DesignFillType.linearGradient) typeBadge = 'LINEAR';
+                if (fill.type == DesignFillType.radialGradient) typeBadge = 'RADIAL';
+                if (fill.type == DesignFillType.angularGradient) typeBadge = 'ANGULAR';
+                if (fill.type == DesignFillType.image) typeBadge = 'IMAGE';
+
+                final hexString = '#${fill.color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase().substring(2)}';
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: tokens.wellBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: tokens.borderSubtle, width: 1.0),
+                  ),
+                  child: Row(
+                    children: [
+                      // Color Chip
+                      GestureDetector(
+                        onTap: () => _handleFillTap(context, node, fill, i, controller),
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: fill.type == DesignFillType.image
+                                ? const Color(0xFF64748B)
+                                : fill.color,
+                            gradient: (fill.type == DesignFillType.linearGradient &&
+                                    fill.gradientColors != null)
+                                ? LinearGradient(colors: fill.gradientColors!)
+                                : null,
+                            borderRadius: BorderRadius.circular(7),
+                            border: Border.all(
+                              color: isDark ? Colors.white24 : Colors.black12,
+                              width: 1.0,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.1),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: fill.type == DesignFillType.image
+                              ? const Icon(Icons.image, size: 14, color: Colors.white)
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+
+                      // Fill Type Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: tokens.accent.withValues(alpha: isDark ? 0.20 : 0.10),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          typeBadge,
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                            color: tokens.accent,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Color Hex Code
+                      Expanded(
+                        child: Text(
+                          fill.type == DesignFillType.image ? 'Image Mask' : hexString,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'monospace',
+                            color: tokens.textMain,
+                          ),
+                        ),
+                      ),
+
+                      // Delete Fill Button
+                      InkWell(
+                        onTap: () {
+                          final updated = List<DesignFill>.from(node.fills)..removeAt(i);
+                          controller.updateNode(node.copyWith(fills: updated));
+                        },
+                        borderRadius: BorderRadius.circular(4),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4.0),
+                          child: Icon(Icons.close_rounded, size: 14, color: tokens.textMuted),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+
+  void _handleFillTap(
+    BuildContext context,
+    DesignNode node,
+    DesignFill fill,
+    int index,
+    EditorController controller,
+  ) {
+    if (fill.type == DesignFillType.image) {
+      final existingImg = fill.imageBase64 ?? fill.imagePath;
+      if (existingImg != null && existingImg.isNotEmpty) {
+        ImageEditorDialog.show(
+          context,
+          initialImageBase64: existingImg,
+          onApply: (newB64) {
+            final updatedFills = List<DesignFill>.from(node.fills);
+            updatedFills[index] = fill.copyWith(
+              imageBase64: newB64,
+              imagePath: newB64,
+            );
+            controller.updateNode(node.copyWith(fills: updatedFills));
+          },
+        );
+      } else {
+        _pickImageFill(context, node, index, controller);
+      }
+    } else {
+      ColorPickerDialog.show(
+        context,
+        initialColor: fill.color,
+        initialFill: fill,
+        onColorChanged: (c) {
+          final updatedFills = List<DesignFill>.from(node.fills);
+          updatedFills[index] = fill.copyWith(color: c);
+          controller.updateNode(node.copyWith(fills: updatedFills));
+        },
+        onFillChanged: (newFill) {
+          final updatedFills = List<DesignFill>.from(node.fills);
+          updatedFills[index] = newFill;
+          controller.updateNode(node.copyWith(fills: updatedFills));
+        },
+      );
+    }
+  }
+
+  Widget _buildStrokesSection(
+    BuildContext context,
+    DesignNode node,
+    EditorController controller,
+    FormaThemeTokens tokens,
+    bool isDark,
+  ) {
+    return PropertySectionCard(
+      title: 'STROKES',
+      icon: Icons.border_style_rounded,
+      tokens: tokens,
+      isDark: isDark,
+      trailing: _buildMiniHeaderButton(
+        icon: Icons.add_rounded,
+        tooltip: 'Add Stroke',
+        tokens: tokens,
+        onTap: () {
+          controller.updateNode(
+            node.copyWith(
+              strokes: [
+                ...node.strokes,
+                const DesignStroke(color: Color(0xFF94A3B8), width: 1.0),
+              ],
+            ),
+          );
+        },
+      ),
+      child: node.strokes.isEmpty
+          ? Text('No strokes applied', style: TextStyle(fontSize: 11, color: tokens.textMuted))
+          : Column(
+              children: node.strokes.asMap().entries.map((entry) {
+                final i = entry.key;
+                final stroke = entry.value;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: tokens.wellBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: tokens.borderSubtle, width: 1.0),
+                  ),
+                  child: Row(
+                    children: [
+                      // Stroke Color Chip
+                      GestureDetector(
+                        onTap: () {
+                          ColorPickerDialog.show(
+                            context,
+                            initialColor: stroke.color,
+                            onColorChanged: (c) {
+                              final updated = List<DesignStroke>.from(node.strokes);
+                              updated[i] = stroke.copyWith(color: c, clearGradient: true);
+                              controller.updateNode(node.copyWith(strokes: updated));
+                            },
+                          );
+                        },
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: stroke.color,
+                            borderRadius: BorderRadius.circular(7),
+                            border: Border.all(
+                              color: isDark ? Colors.white24 : Colors.black12,
+                              width: 1.0,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+
+                      // Width Scrubber
+                      Expanded(
+                        child: FormaTouchNudgeField(
+                          label: 'W',
+                          value: stroke.width,
+                          min: 0,
+                          onChanged: (val) {
+                            final updated = List<DesignStroke>.from(node.strokes);
+                            updated[i] = stroke.copyWith(width: math.max(0, val));
+                            controller.updateNode(node.copyWith(strokes: updated));
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+
+                      // Delete Stroke Button
+                      InkWell(
+                        onTap: () {
+                          final updated = List<DesignStroke>.from(node.strokes)..removeAt(i);
+                          controller.updateNode(node.copyWith(strokes: updated));
+                        },
+                        borderRadius: BorderRadius.circular(4),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4.0),
+                          child: Icon(Icons.close_rounded, size: 14, color: tokens.textMuted),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+
+  Widget _buildEffectsSection(
+    BuildContext context,
+    DesignNode node,
+    EditorController controller,
+    FormaThemeTokens tokens,
+    bool isDark,
+  ) {
+    return PropertySectionCard(
+      title: 'EFFECTS',
+      icon: Icons.auto_awesome_rounded,
+      tokens: tokens,
+      isDark: isDark,
+      trailing: PopupMenuButton<DesignEffectType>(
+        icon: Icon(Icons.add_rounded, size: 16, color: tokens.accent),
+        tooltip: 'Add Effect',
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: tokens.borderSubtle),
+        ),
+        color: tokens.surface,
+        onSelected: (type) => _addEffect(type, node, controller),
+        itemBuilder: (ctx) => [
+          _buildEffectMenuItem(DesignEffectType.dropShadow, 'Drop Shadow', tokens),
+          _buildEffectMenuItem(DesignEffectType.innerShadow, 'Inner Shadow', tokens),
+          _buildEffectMenuItem(DesignEffectType.blur, 'Layer Blur', tokens),
+          _buildEffectMenuItem(DesignEffectType.backgroundBlur, 'Backdrop Blur', tokens),
+          _buildEffectMenuItem(DesignEffectType.outerGlow, 'Outer Glow', tokens),
+          _buildEffectMenuItem(DesignEffectType.innerGlow, 'Inner Glow', tokens),
+          _buildEffectMenuItem(DesignEffectType.bloom, 'Bloom', tokens),
+          _buildEffectMenuItem(DesignEffectType.grayscale, 'Grayscale', tokens),
+          _buildEffectMenuItem(DesignEffectType.sepia, 'Sepia Tone', tokens),
+          _buildEffectMenuItem(DesignEffectType.invertColors, 'Invert Colors', tokens),
+        ],
+      ),
+      child: node.effects.isEmpty
+          ? Text('No effects applied', style: TextStyle(fontSize: 11, color: tokens.textMuted))
+          : Column(
+              children: node.effects.asMap().entries.map((entry) {
+                final i = entry.key;
+                final eff = entry.value;
+
+                final hasColor = eff.type == DesignEffectType.dropShadow ||
+                    eff.type == DesignEffectType.innerShadow ||
+                    eff.type == DesignEffectType.outerGlow ||
+                    eff.type == DesignEffectType.innerGlow;
+
+                final hasOffsets = eff.type == DesignEffectType.dropShadow ||
+                    eff.type == DesignEffectType.innerShadow;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: tokens.wellBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: tokens.borderSubtle, width: 1.0),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          if (hasColor) ...[
+                            GestureDetector(
+                              onTap: () {
+                                ColorPickerDialog.show(
+                                  context,
+                                  initialColor: eff.color,
+                                  onColorChanged: (c) {
+                                    final updated = List<DesignEffect>.from(node.effects);
+                                    updated[i] = eff.copyWith(color: c);
+                                    controller.updateNode(node.copyWith(effects: updated));
+                                  },
+                                );
+                              },
+                              child: Container(
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  color: eff.color,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.white, width: 1.5),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Expanded(
+                            child: Text(
+                              _getEffectLabel(eff.type),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: tokens.textMain,
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () {
+                              final updated = List<DesignEffect>.from(node.effects)..removeAt(i);
+                              controller.updateNode(node.copyWith(effects: updated));
+                            },
+                            borderRadius: BorderRadius.circular(4),
+                            child: Padding(
+                              padding: const EdgeInsets.all(2.0),
+                              child: Icon(Icons.close_rounded, size: 14, color: tokens.textMuted),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FormaTouchNudgeField(
+                              label: 'Blur',
+                              value: eff.blurRadius,
+                              min: 0,
+                              onChanged: (v) {
+                                final updated = List<DesignEffect>.from(node.effects);
+                                updated[i] = eff.copyWith(blurRadius: v);
+                                controller.updateNode(node.copyWith(effects: updated));
+                              },
+                            ),
+                          ),
+                          if (hasOffsets) ...[
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: FormaTouchNudgeField(
+                                label: 'X',
+                                value: eff.offsetX,
+                                onChanged: (v) {
+                                  final updated = List<DesignEffect>.from(node.effects);
+                                  updated[i] = eff.copyWith(offsetX: v);
+                                  controller.updateNode(node.copyWith(effects: updated));
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: FormaTouchNudgeField(
+                                label: 'Y',
+                                value: eff.offsetY,
+                                onChanged: (v) {
+                                  final updated = List<DesignEffect>.from(node.effects);
+                                  updated[i] = eff.copyWith(offsetY: v);
+                                  controller.updateNode(node.copyWith(effects: updated));
+                                },
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+
+  PopupMenuItem<DesignEffectType> _buildEffectMenuItem(
+    DesignEffectType type,
+    String label,
+    FormaThemeTokens tokens,
+  ) {
+    return PopupMenuItem(
+      value: type,
+      height: 34,
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 12, color: tokens.textMain),
+      ),
+    );
+  }
+
+  void _addEffect(DesignEffectType type, DesignNode node, EditorController controller) {
+    DesignEffect newEff;
+    switch (type) {
+      case DesignEffectType.dropShadow:
+        newEff = const DesignEffect(
+          type: DesignEffectType.dropShadow,
+          color: Color(0x33000000),
+          offsetX: 0,
+          offsetY: 4,
+          blurRadius: 8,
+        );
+        break;
+      case DesignEffectType.innerShadow:
+        newEff = const DesignEffect(
+          type: DesignEffectType.innerShadow,
+          color: Color(0x33000000),
+          offsetX: 0,
+          offsetY: 2,
+          blurRadius: 4,
+        );
+        break;
+      case DesignEffectType.blur:
+        newEff = const DesignEffect(
+          type: DesignEffectType.blur,
+          blurRadius: 10,
+        );
+        break;
+      case DesignEffectType.backgroundBlur:
+        newEff = const DesignEffect(
+          type: DesignEffectType.backgroundBlur,
+          blurRadius: 16,
+        );
+        break;
+      case DesignEffectType.outerGlow:
+        newEff = const DesignEffect(
+          type: DesignEffectType.outerGlow,
+          color: Color(0x663B82F6),
+          blurRadius: 16,
+          spreadRadius: 4,
+        );
+        break;
+      case DesignEffectType.innerGlow:
+        newEff = const DesignEffect(
+          type: DesignEffectType.innerGlow,
+          color: Color(0x6660A5FA),
+          blurRadius: 12,
+        );
+        break;
+      case DesignEffectType.bloom:
+        newEff = const DesignEffect(
+          type: DesignEffectType.bloom,
+          blurRadius: 14,
+        );
+        break;
+      case DesignEffectType.grayscale:
+        newEff = const DesignEffect(type: DesignEffectType.grayscale);
+        break;
+      case DesignEffectType.sepia:
+        newEff = const DesignEffect(type: DesignEffectType.sepia);
+        break;
+      case DesignEffectType.invertColors:
+        newEff = const DesignEffect(type: DesignEffectType.invertColors);
+        break;
+      default:
+        newEff = const DesignEffect(type: DesignEffectType.dropShadow);
+    }
+    controller.updateNode(node.copyWith(effects: [...node.effects, newEff]));
+  }
+
+  String _getEffectLabel(DesignEffectType type) {
+    switch (type) {
+      case DesignEffectType.dropShadow:
+        return 'DROP SHADOW';
+      case DesignEffectType.innerShadow:
+        return 'INNER SHADOW';
+      case DesignEffectType.blur:
+        return 'LAYER BLUR';
+      case DesignEffectType.backgroundBlur:
+        return 'BACKDROP BLUR';
+      case DesignEffectType.outerGlow:
+        return 'OUTER GLOW';
+      case DesignEffectType.innerGlow:
+        return 'INNER GLOW';
+      case DesignEffectType.bloom:
+        return 'BLOOM';
+      case DesignEffectType.grayscale:
+        return 'GRAYSCALE';
+      case DesignEffectType.sepia:
+        return 'SEPIA';
+      case DesignEffectType.invertColors:
+        return 'INVERT COLORS';
+      default:
+        return 'EFFECT';
+    }
+  }
+
+  Widget _buildVectorPathSection(
+    BuildContext context,
+    DesignNode node,
+    EditorController controller,
+    FormaThemeTokens tokens,
+    bool isDark,
+  ) {
+    return PropertySectionCard(
+      title: 'VECTOR PATH CONTROLS',
+      icon: Icons.polyline_rounded,
+      tokens: tokens,
+      isDark: isDark,
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: tokens.accent,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          icon: const Icon(Icons.edit_road_rounded, size: 16),
+          label: const Text(
+            'Edit Vector Anchor Points',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+          ),
+          onPressed: () => controller.enterVectorEditMode(node.id),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExportSection(
+    BuildContext context,
+    DesignNode node,
+    EditorState state,
+    FormaThemeTokens tokens,
+    bool isDark,
+  ) {
+    return PropertySectionCard(
+      title: 'EXPORT',
+      icon: Icons.file_download_outlined,
+      tokens: tokens,
+      isDark: isDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Format Selector Segmented Pills
           Row(
-            children: [
-              Expanded(
-                child: NeuButton(
-                  isActive: cfg.direction == AutoLayoutDirection.horizontal,
-                  onPressed: () {
-                    controller.updateNode(
-                      node.copyWith(
-                        layoutConfig: cfg.copyWith(
-                          direction: AutoLayoutDirection.horizontal,
+            children: ['PNG', 'JPG', 'SVG', 'PDF', 'FIG'].map((fmt) {
+              final isSel = _selectedExportFormat == fmt;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: InkWell(
+                    onTap: () => setState(() => _selectedExportFormat = fmt),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      height: 26,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isSel
+                            ? tokens.accent.withValues(alpha: isDark ? 0.25 : 0.14)
+                            : tokens.wellBg,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isSel ? tokens.accent : tokens.borderSubtle,
+                          width: 1.0,
                         ),
                       ),
-                    );
-                  },
-                  child: const Text('Row', style: TextStyle(fontSize: 11)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: NeuButton(
-                  isActive: cfg.direction == AutoLayoutDirection.vertical,
-                  onPressed: () {
-                    controller.updateNode(
-                      node.copyWith(
-                        layoutConfig: cfg.copyWith(
-                          direction: AutoLayoutDirection.vertical,
+                      child: Text(
+                        fmt,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: isSel ? FontWeight.w800 : FontWeight.w500,
+                          color: isSel ? tokens.accent : tokens.textMuted,
                         ),
                       ),
-                    );
-                  },
-                  child: const Text('Column', style: TextStyle(fontSize: 11)),
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              );
+            }).toList(),
           ),
           const SizedBox(height: 8),
+
+          // Scale Selector Segmented Pills
           Row(
-            children: [
-              Expanded(
-                child: _buildNumberInput('Gap', cfg.gap, (val) {
-                  controller.updateNode(
-                    node.copyWith(layoutConfig: cfg.copyWith(gap: val)),
-                  );
-                }, isDark),
+            children: ['0.5x', '1x', '2x', '3x'].map((scale) {
+              final isSel = _selectedExportScale == scale;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: InkWell(
+                    onTap: () => setState(() => _selectedExportScale = scale),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      height: 24,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isSel
+                            ? tokens.accent.withValues(alpha: isDark ? 0.25 : 0.14)
+                            : tokens.wellBg,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isSel ? tokens.accent : tokens.borderSubtle,
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Text(
+                        scale,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: isSel ? FontWeight.w800 : FontWeight.w500,
+                          color: isSel ? tokens.accent : tokens.textMuted,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 10),
+
+          // Primary Export Action Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: tokens.accent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildNumberInput('Pad', cfg.paddingLeft, (val) {
-                  controller.updateNode(
-                    node.copyWith(
-                      layoutConfig: cfg.copyWith(
-                        paddingLeft: val,
-                        paddingTop: val,
-                        paddingRight: val,
-                        paddingBottom: val,
+              icon: const Icon(Icons.file_download_outlined, size: 15),
+              label: Text(
+                'Export ${node.name} ($_selectedExportScale $_selectedExportFormat)',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (_) => ExportDialog(
+                    project: state.project,
+                    activePageId: state.activePageId,
+                    selectedNodeId: node.id,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPageSettings(
+    BuildContext context,
+    EditorState state,
+    EditorController controller,
+    AppSettings settings,
+    FormaThemeTokens tokens,
+    bool isDark,
+  ) {
+    final page = state.project.getPage(state.activePageId);
+    if (page == null) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        PropertySectionCard(
+          title: 'CANVAS SETTINGS',
+          icon: Icons.palette_outlined,
+          tokens: tokens,
+          isDark: isDark,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Color',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textMain,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      ColorPickerDialog.show(
+                        context,
+                        initialColor: page.backgroundColor,
+                        onColorChanged: (c) => controller.setPageBackgroundColor(c),
+                      );
+                    },
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: page.backgroundColor,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: tokens.borderSubtle, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.12),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Quick palette swatches
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  const Color(0xFFFFFFFF),
+                  const Color(0xFFF8FAFC),
+                  const Color(0xFFF1F5F9),
+                  const Color(0xFFE2E8F0),
+                  const Color(0xFF0F172A),
+                  const Color(0xFF1E293B),
+                  const Color(0xFF000000),
+                  const Color(0xFFFEF3C7),
+                  const Color(0xFFEFF6FF),
+                  const Color(0xFFFDF2F8),
+                ].map((c) {
+                  final isSelected = page.backgroundColor.toARGB32() == c.toARGB32();
+                  return GestureDetector(
+                    onTap: () => controller.setPageBackgroundColor(c),
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: c,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isSelected ? tokens.accent : Colors.black26,
+                          width: isSelected ? 2.5 : 1.0,
+                        ),
                       ),
                     ),
                   );
-                }, isDark),
+                }).toList(),
               ),
             ],
           ),
-        ],
+        ),
+
+        // Grid & Snapping Card
+        PropertySectionCard(
+          title: 'GRID & SNAPPING',
+          icon: Icons.grid_4x4_rounded,
+          tokens: tokens,
+          isDark: isDark,
+          child: Column(
+            children: [
+              _buildSwitchRow(
+                label: 'Show Grid',
+                value: settings.showGrid,
+                tokens: tokens,
+                onChanged: (val) => ref.read(settingsProvider.notifier).toggleShowGrid(val),
+              ),
+              const SizedBox(height: 6),
+              _buildSwitchRow(
+                label: 'Snap to Objects',
+                value: settings.snapToObjects,
+                tokens: tokens,
+                onChanged: (val) => ref.read(settingsProvider.notifier).toggleSnapToObjects(val),
+              ),
+              const SizedBox(height: 6),
+              _buildSwitchRow(
+                label: 'Snap to Grid',
+                value: settings.snapToGrid,
+                tokens: tokens,
+                onChanged: (val) => ref.read(settingsProvider.notifier).toggleSnapToGrid(val),
+              ),
+            ],
+          ),
+        ),
+
+        // Canvas Export Card
+        PropertySectionCard(
+          title: 'EXPORT CANVAS',
+          icon: Icons.file_download_outlined,
+          tokens: tokens,
+          isDark: isDark,
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: tokens.accent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.file_download_outlined, size: 15),
+              label: const Text('Export Current Canvas', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (_) => ExportDialog(
+                    project: state.project,
+                    activePageId: state.activePageId,
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _buildSwitchRow({
+    required String label,
+    required bool value,
+    required FormaThemeTokens tokens,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
+              color: tokens.textMain,
+            ),
+          ),
+        ),
+        Transform.scale(
+          scale: 0.75,
+          child: Switch(
+            value: value,
+            activeThumbColor: tokens.accent,
+            activeTrackColor: tokens.accent.withValues(alpha: 0.3),
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMicroIconButton({
+    required IconData icon,
+    required String tooltip,
+    required FormaThemeTokens tokens,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 300),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          height: 26,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Center(
+            child: Icon(icon, size: 15, color: tokens.textMain),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniHeaderButton({
+    required IconData icon,
+    required String tooltip,
+    required FormaThemeTokens tokens,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: tokens.accent.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Center(
+            child: Icon(icon, size: 14, color: tokens.accent),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionPill({
+    required String label,
+    required IconData icon,
+    required FormaThemeTokens tokens,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: tokens.wellBg,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: tokens.borderSubtle, width: 1.0),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 12, color: tokens.textMuted),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textMain,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSegmentedConstraintPill<T>({
+    required T currentValue,
+    required List<T> values,
+    required String Function(T) labelBuilder,
+    required FormaThemeTokens tokens,
+    required ValueChanged<T> onSelected,
+  }) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: tokens.wellBg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: tokens.borderSubtle, width: 1.0),
+      ),
+      child: Row(
+        children: values.map((val) {
+          final isSelected = val == currentValue;
+          return Expanded(
+            child: InkWell(
+              onTap: () => onSelected(val),
+              borderRadius: BorderRadius.circular(5),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? tokens.accent.withValues(alpha: tokens.isDark ? 0.25 : 0.14)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  labelBuilder(val),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                    color: isSelected ? tokens.accent : tokens.textMuted,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -909,847 +1792,107 @@ class PropertiesPanel extends ConsumerWidget {
       }
     }
   }
+}
 
-  Future<void> _pickAndReplaceImage(
-    BuildContext context,
-    DesignNode node,
-    EditorController controller,
-  ) async {
-    try {
-      final picked = await FilePicker.pickFile(
-        type: FileType.custom,
-        allowedExtensions: ['png', 'jpg', 'jpeg', 'webp'],
-      );
-      if (picked != null) {
-        final bytes = await picked.readAsBytes();
-        final b64 = base64Encode(bytes);
-        final fillImg = node.fills.where((f) => f.type == DesignFillType.image).firstOrNull;
-        if (fillImg != null) {
-          final idx = node.fills.indexOf(fillImg);
-          final updated = List<DesignFill>.from(node.fills);
-          updated[idx] = fillImg.copyWith(imageBase64: b64, imagePath: b64);
-          controller.updateNode(node.copyWith(fills: updated, imagePath: b64));
-        } else {
-          controller.updateNode(
-            node.copyWith(
-              imagePath: b64,
-              fills: [DesignFill.image(imageBase64: b64)],
-            ),
-          );
-        }
-      }
-    } catch (_) {}
-  }
+/// Un-cramped, refined card section wrapper with clean 1px hairline border and comfortable padding
+class PropertySectionCard extends StatelessWidget {
+  final String title;
+  final IconData? icon;
+  final Widget? trailing;
+  final Widget child;
+  final FormaThemeTokens tokens;
+  final bool isDark;
+  final EdgeInsetsGeometry padding;
 
-  Widget _buildFillsSection(
-    BuildContext context,
-    DesignNode node,
-    EditorController controller,
-    bool isDark,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _buildSectionTitle('FILLS', isDark),
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.image_outlined, size: 16),
-                  tooltip: 'Add Image Fill (Masked)',
-                  splashRadius: 14,
-                  onPressed: () => _pickImageFill(context, node, null, controller),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add_rounded, size: 16),
-                  tooltip: 'Add Color / Gradient Fill',
-                  splashRadius: 14,
-                  onPressed: () {
-                    controller.updateNode(
-                      node.copyWith(
-                        fills: [
-                          ...node.fills,
-                          const DesignFill.solid(Color(0xFF2B3445)),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ],
+  const PropertySectionCard({
+    super.key,
+    required this.title,
+    this.icon,
+    this.trailing,
+    required this.child,
+    required this.tokens,
+    required this.isDark,
+    this.padding = const EdgeInsets.all(12),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: tokens.borderSubtle,
+          width: 1.0,
         ),
-        ...node.fills.asMap().entries.map((entry) {
-          final i = entry.key;
-          final fill = entry.value;
-
-          String typeBadge = 'SOLID';
-          if (fill.type == DesignFillType.linearGradient) typeBadge = 'LINEAR';
-          if (fill.type == DesignFillType.radialGradient) typeBadge = 'RADIAL';
-          if (fill.type == DesignFillType.angularGradient) typeBadge = 'ANGULAR';
-          if (fill.type == DesignFillType.image) typeBadge = 'IMAGE';
-
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    if (fill.type == DesignFillType.image) {
-                      final existingImg = fill.imageBase64 ?? fill.imagePath;
-                      if (existingImg != null && existingImg.isNotEmpty) {
-                        ImageEditorDialog.show(
-                          context,
-                          initialImageBase64: existingImg,
-                          onApply: (newB64) {
-                            final updatedFills = List<DesignFill>.from(node.fills);
-                            updatedFills[i] = fill.copyWith(
-                              imageBase64: newB64,
-                              imagePath: newB64,
-                            );
-                            controller.updateNode(node.copyWith(fills: updatedFills));
-                          },
-                        );
-                      } else {
-                        _pickImageFill(context, node, i, controller);
-                      }
-                    } else {
-                      ColorPickerDialog.show(
-                        context,
-                        initialColor: fill.color,
-                        initialFill: fill,
-                        onColorChanged: (c) {
-                          final updatedFills = List<DesignFill>.from(node.fills);
-                          updatedFills[i] = fill.copyWith(color: c);
-                          controller.updateNode(node.copyWith(fills: updatedFills));
-                        },
-                        onFillChanged: (newFill) {
-                          final updatedFills = List<DesignFill>.from(node.fills);
-                          updatedFills[i] = newFill;
-                          controller.updateNode(node.copyWith(fills: updatedFills));
-                        },
-                      );
-                    }
-                  },
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: fill.type == DesignFillType.image
-                          ? Colors.blueGrey
-                          : fill.color,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.black12),
-                    ),
-                    child: fill.type == DesignFillType.image
-                        ? const Icon(Icons.image, size: 14, color: Colors.white)
-                        : null,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: FormaColors.primaryBlue.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    typeBadge,
-                    style: const TextStyle(
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.bold,
-                      color: FormaColors.primaryBlue,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    fill.type == DesignFillType.image
-                        ? 'Image Fill'
-                        : _colorToHex(fill.color),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: isDark
-                          ? FormaColors.darkTextMain
-                          : FormaColors.lightTextMain,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    fill.isVisible
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    size: 14,
-                  ),
-                  splashRadius: 12,
-                  onPressed: () {
-                    final updatedFills = List<DesignFill>.from(node.fills);
-                    updatedFills[i] = fill.copyWith(isVisible: !fill.isVisible);
-                    controller.updateNode(node.copyWith(fills: updatedFills));
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 14),
-                  splashRadius: 12,
-                  onPressed: () {
-                    final updatedFills = List<DesignFill>.from(node.fills)
-                      ..removeAt(i);
-                    controller.updateNode(node.copyWith(fills: updatedFills));
-                  },
-                ),
-              ],
-            ),
-          );
-        }),
-        if (node.type == NodeType.image || node.fills.any((f) => f.type == DesignFillType.image))
-          Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 8),
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.image_outlined, size: 15, color: FormaColors.primaryBlue),
-                      const SizedBox(width: 6),
-                      Text(
-                        'IMAGE SETTINGS',
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.6,
-                          color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.swap_horiz_rounded, size: 14),
-                          label: const Text('Replace', style: TextStyle(fontSize: 11)),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          onPressed: () => _pickAndReplaceImage(context, node, controller),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.crop_rotate_rounded, size: 14),
-                          label: const Text('Crop / Filter', style: TextStyle(fontSize: 11)),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          onPressed: () {
-                            final fillImg = node.fills.where((f) => f.type == DesignFillType.image).firstOrNull;
-                            final imgData = fillImg?.imageBase64 ?? fillImg?.imagePath ?? node.imagePath;
-                            ImageEditorDialog.show(
-                              context,
-                              initialImageBase64: imgData,
-                              onApply: (newB64) {
-                                if (fillImg != null) {
-                                  final idx = node.fills.indexOf(fillImg);
-                                  final updated = List<DesignFill>.from(node.fills);
-                                  updated[idx] = fillImg.copyWith(imageBase64: newB64, imagePath: newB64);
-                                  controller.updateNode(node.copyWith(fills: updated, imagePath: newB64));
-                                } else {
-                                  controller.updateNode(node.copyWith(imagePath: newB64));
-                                }
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
           ),
-      ],
-    );
-  }
-
-  Widget _buildStrokesSection(
-    BuildContext context,
-    DesignNode node,
-    EditorController controller,
-    bool isDark,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _buildSectionTitle('STROKES', isDark),
-            IconButton(
-              icon: const Icon(Icons.add_rounded, size: 16),
-              splashRadius: 14,
-              onPressed: () {
-                controller.updateNode(
-                  node.copyWith(
-                    strokes: [
-                      ...node.strokes,
-                      const DesignStroke(color: Color(0xFFC8D3E2), width: 1.0),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-        ...node.strokes.asMap().entries.map((entry) {
-          final i = entry.key;
-          final stroke = entry.value;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    ColorPickerDialog.show(
-                      context,
-                      initialColor: stroke.color,
-                      initialFill: stroke.hasGradient
-                          ? DesignFill.linear(
-                              colors: stroke.gradientColors!,
-                              stops: stroke.gradientStops,
-                              angle: stroke.gradientAngle,
-                            )
-                          : DesignFill.solid(stroke.color),
-                      onColorChanged: (c) {
-                        final updated = List<DesignStroke>.from(node.strokes);
-                        updated[i] = stroke.copyWith(color: c, clearGradient: true);
-                        controller.updateNode(
-                          node.copyWith(strokes: updated),
-                        );
-                      },
-                      onFillChanged: (fill) {
-                        final updated = List<DesignStroke>.from(node.strokes);
-                        if (fill.type == DesignFillType.solid) {
-                          updated[i] = stroke.copyWith(color: fill.color, clearGradient: true);
-                        } else if (fill.gradientColors != null && fill.gradientColors!.length >= 2) {
-                          updated[i] = stroke.copyWith(
-                            gradientColors: fill.gradientColors,
-                            gradientStops: fill.gradientStops,
-                            gradientAngle: fill.gradientAngle,
-                          );
-                        }
-                        controller.updateNode(
-                          node.copyWith(strokes: updated),
-                        );
-                      },
-                    );
-                  },
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: stroke.hasGradient ? null : stroke.color,
-                      gradient: stroke.hasGradient
-                          ? LinearGradient(colors: stroke.gradientColors!)
-                          : null,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.black12),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FormaTouchNudgeField(
-                    label: 'W',
-                    value: stroke.width,
-                    min: 0,
-                    onChanged: (val) {
-                      final updated = List<DesignStroke>.from(node.strokes);
-                      updated[i] = stroke.copyWith(width: math.max(0, val));
-                      controller.updateNode(node.copyWith(strokes: updated));
-                    },
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 14),
-                  splashRadius: 12,
-                  onPressed: () {
-                    final updated = List<DesignStroke>.from(node.strokes)
-                      ..removeAt(i);
-                    controller.updateNode(node.copyWith(strokes: updated));
-                  },
-                ),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildEffectsSection(
-    BuildContext context,
-    DesignNode node,
-    EditorController controller,
-    bool isDark,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _buildSectionTitle('EFFECTS', isDark),
-            PopupMenuButton<DesignEffectType>(
-              icon: const Icon(Icons.add_rounded, size: 16),
-              tooltip: 'Add Effect',
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              onSelected: (type) {
-                DesignEffect newEff;
-                switch (type) {
-                  case DesignEffectType.dropShadow:
-                    newEff = const DesignEffect(
-                      type: DesignEffectType.dropShadow,
-                      color: Color(0x33000000),
-                      offsetX: 0,
-                      offsetY: 4,
-                      blurRadius: 8,
-                    );
-                    break;
-                  case DesignEffectType.innerShadow:
-                    newEff = const DesignEffect(
-                      type: DesignEffectType.innerShadow,
-                      color: Color(0x33000000),
-                      offsetX: 0,
-                      offsetY: 2,
-                      blurRadius: 4,
-                    );
-                    break;
-                  case DesignEffectType.blur:
-                    newEff = const DesignEffect(
-                      type: DesignEffectType.blur,
-                      blurRadius: 10,
-                    );
-                    break;
-                  case DesignEffectType.backgroundBlur:
-                    newEff = const DesignEffect(
-                      type: DesignEffectType.backgroundBlur,
-                      blurRadius: 16,
-                    );
-                    break;
-                  case DesignEffectType.outerGlow:
-                    newEff = const DesignEffect(
-                      type: DesignEffectType.outerGlow,
-                      color: Color(0x663B82F6),
-                      blurRadius: 16,
-                      spreadRadius: 4,
-                    );
-                    break;
-                  case DesignEffectType.innerGlow:
-                    newEff = const DesignEffect(
-                      type: DesignEffectType.innerGlow,
-                      color: Color(0x6660A5FA),
-                      blurRadius: 12,
-                    );
-                    break;
-                  case DesignEffectType.colorTint:
-                    newEff = const DesignEffect(
-                      type: DesignEffectType.colorTint,
-                      color: Color(0x443B82F6),
-                    );
-                    break;
-                  case DesignEffectType.vignette:
-                    newEff = const DesignEffect(
-                      type: DesignEffectType.vignette,
-                      color: Color(0x99000000),
-                      blurRadius: 20,
-                    );
-                    break;
-                  case DesignEffectType.bloom:
-                    newEff = const DesignEffect(
-                      type: DesignEffectType.bloom,
-                      blurRadius: 14,
-                    );
-                    break;
-                  case DesignEffectType.grayscale:
-                    newEff = const DesignEffect(
-                      type: DesignEffectType.grayscale,
-                    );
-                    break;
-                  case DesignEffectType.sepia:
-                    newEff = const DesignEffect(
-                      type: DesignEffectType.sepia,
-                    );
-                    break;
-                  case DesignEffectType.invertColors:
-                    newEff = const DesignEffect(
-                      type: DesignEffectType.invertColors,
-                    );
-                    break;
-                }
-                controller.updateNode(
-                  node.copyWith(effects: [...node.effects, newEff]),
-                );
-              },
-              itemBuilder: (ctx) => [
-                const PopupMenuItem(
-                  value: DesignEffectType.dropShadow,
-                  child: Text('Drop Shadow'),
-                ),
-                const PopupMenuItem(
-                  value: DesignEffectType.innerShadow,
-                  child: Text('Inner Shadow'),
-                ),
-                const PopupMenuItem(
-                  value: DesignEffectType.blur,
-                  child: Text('Layer Blur'),
-                ),
-                const PopupMenuItem(
-                  value: DesignEffectType.backgroundBlur,
-                  child: Text('Background Blur'),
-                ),
-                const PopupMenuItem(
-                  value: DesignEffectType.outerGlow,
-                  child: Text('Outer Glow'),
-                ),
-                const PopupMenuItem(
-                  value: DesignEffectType.innerGlow,
-                  child: Text('Inner Glow'),
-                ),
-                const PopupMenuItem(
-                  value: DesignEffectType.colorTint,
-                  child: Text('Color Tint'),
-                ),
-                const PopupMenuItem(
-                  value: DesignEffectType.vignette,
-                  child: Text('Vignette'),
-                ),
-                const PopupMenuItem(
-                  value: DesignEffectType.bloom,
-                  child: Text('Bloom / Soft Light'),
-                ),
-                const PopupMenuItem(
-                  value: DesignEffectType.grayscale,
-                  child: Text('Grayscale Filter'),
-                ),
-                const PopupMenuItem(
-                  value: DesignEffectType.sepia,
-                  child: Text('Sepia Tone'),
-                ),
-                const PopupMenuItem(
-                  value: DesignEffectType.invertColors,
-                  child: Text('Invert Colors'),
-                ),
-              ],
-            ),
-          ],
-        ),
-        ...node.effects.asMap().entries.map((entry) {
-          final i = entry.key;
-          final eff = entry.value;
-
-          String label = 'DROP SHADOW';
-          if (eff.type == DesignEffectType.innerShadow) label = 'INNER SHADOW';
-          if (eff.type == DesignEffectType.blur) label = 'LAYER BLUR';
-          if (eff.type == DesignEffectType.backgroundBlur) label = 'BACKDROP BLUR';
-          if (eff.type == DesignEffectType.outerGlow) label = 'OUTER GLOW';
-          if (eff.type == DesignEffectType.innerGlow) label = 'INNER GLOW';
-          if (eff.type == DesignEffectType.colorTint) label = 'COLOR TINT';
-          if (eff.type == DesignEffectType.vignette) label = 'VIGNETTE';
-          if (eff.type == DesignEffectType.bloom) label = 'BLOOM';
-          if (eff.type == DesignEffectType.grayscale) label = 'GRAYSCALE';
-          if (eff.type == DesignEffectType.sepia) label = 'SEPIA';
-          if (eff.type == DesignEffectType.invertColors) label = 'INVERT COLORS';
-
-          final hasColor = eff.type == DesignEffectType.dropShadow ||
-              eff.type == DesignEffectType.innerShadow ||
-              eff.type == DesignEffectType.outerGlow ||
-              eff.type == DesignEffectType.innerGlow ||
-              eff.type == DesignEffectType.colorTint ||
-              eff.type == DesignEffectType.vignette;
-
-          final hasOffsets = eff.type == DesignEffectType.dropShadow ||
-              eff.type == DesignEffectType.innerShadow;
-
-          final hasSpread = eff.type == DesignEffectType.dropShadow ||
-              eff.type == DesignEffectType.outerGlow;
-
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: FormaTheme.tokensOf(context).wellBg,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: FormaTheme.tokensOf(context).borderSubtle,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      if (hasColor) ...[
-                        GestureDetector(
-                          onTap: () {
-                            ColorPickerDialog.show(
-                              context,
-                              initialColor: eff.color,
-                              onColorChanged: (c) {
-                                final updated = List<DesignEffect>.from(node.effects);
-                                updated[i] = eff.copyWith(color: c);
-                                controller.updateNode(node.copyWith(effects: updated));
-                              },
-                            );
-                          },
-                          child: Container(
-                            width: 22,
-                            height: 22,
-                            decoration: BoxDecoration(
-                              color: eff.color,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: Colors.white, width: 1.5),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: eff.color.withValues(alpha: 0.4),
-                                  blurRadius: 4,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ] else ...[
-                        const Icon(Icons.blur_on_rounded, size: 16),
-                        const SizedBox(width: 8),
-                      ],
-                      Expanded(
-                        child: Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: isDark
-                                ? FormaColors.darkTextMain
-                                : FormaColors.lightTextMain,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 14),
-                        splashRadius: 12,
-                        onPressed: () {
-                          final updated = List<DesignEffect>.from(node.effects)
-                            ..removeAt(i);
-                          controller.updateNode(node.copyWith(effects: updated));
-                        },
-                      ),
-                    ],
-                  ),
-                  if (hasColor) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Text(
-                          'DARKNESS',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-                          ),
-                        ),
-                        Expanded(
-                          child: Slider(
-                            value: eff.color.a.clamp(0.0, 1.0),
-                            min: 0.0,
-                            max: 1.0,
-                            divisions: 20,
-                            activeColor: FormaColors.primaryBlue,
-                            onChanged: (val) {
-                              final updated = List<DesignEffect>.from(node.effects);
-                              updated[i] = eff.copyWith(
-                                color: eff.color.withValues(alpha: val),
-                              );
-                              controller.updateNode(node.copyWith(effects: updated));
-                            },
-                          ),
-                        ),
-                        Text(
-                          '${(eff.color.a * 100).toInt()}%',
-                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ],
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: FormaTouchNudgeField(
-                            label: 'BLUR',
-                            value: eff.blurRadius,
-                            min: 0,
-                            onChanged: (v) {
-                              final updated = List<DesignEffect>.from(node.effects);
-                              updated[i] = eff.copyWith(blurRadius: v);
-                              controller.updateNode(node.copyWith(effects: updated));
-                            },
-                          ),
-                        ),
-                        if (hasSpread) ...[
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: FormaTouchNudgeField(
-                              label: 'SPREAD',
-                              value: eff.spreadRadius,
-                              min: 0,
-                              onChanged: (v) {
-                                final updated = List<DesignEffect>.from(node.effects);
-                                updated[i] = eff.copyWith(spreadRadius: v);
-                                controller.updateNode(node.copyWith(effects: updated));
-                              },
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  if (hasOffsets) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FormaTouchNudgeField(
-                            label: 'X',
-                            value: eff.offsetX,
-                            onChanged: (v) {
-                              final updated = List<DesignEffect>.from(node.effects);
-                              updated[i] = eff.copyWith(offsetX: v);
-                              controller.updateNode(node.copyWith(effects: updated));
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: FormaTouchNudgeField(
-                            label: 'Y',
-                            value: eff.offsetY,
-                            onChanged: (v) {
-                              final updated = List<DesignEffect>.from(node.effects);
-                              updated[i] = eff.copyWith(offsetY: v);
-                              controller.updateNode(node.copyWith(effects: updated));
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildSectionTitle(String title, bool isDark) {
-    return Text(
-      title,
-      style: TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.8,
-        color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+        ],
       ),
-    );
-  }
-
-  Widget _buildNumberInput(
-    String label,
-    double value,
-    ValueChanged<double> onChanged,
-    bool isDark,
-  ) {
-    return NeuWell(
-      radius: 10,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: isDark
-                  ? FormaColors.darkTextMuted
-                  : FormaColors.lightTextMuted,
+          // Header Row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 10, 8),
+            child: Row(
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 13, color: tokens.accent),
+                  const SizedBox(width: 6),
+                ],
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      color: tokens.textMuted,
+                    ),
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 4),
+                  Flexible(
+                    flex: 0,
+                    child: trailing!,
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: TextField(
-              controller: TextEditingController(text: value.toStringAsFixed(1)),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              style: TextStyle(
-                fontSize: 11,
-                color: isDark
-                    ? FormaColors.darkTextMain
-                    : FormaColors.lightTextMain,
-              ),
-              decoration: const InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-              ),
-              onSubmitted: (txt) {
-                final parsed = double.tryParse(txt);
-                if (parsed != null) onChanged(parsed);
-              },
-            ),
+          Divider(height: 1, color: tokens.borderSubtle),
+          // Content with comfortable padding
+          Padding(
+            padding: padding,
+            child: child,
           ),
         ],
       ),
     );
   }
-
-  String _colorToHex(Color color) {
-    return '#${color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
-  }
 }
-
 
 class TypographyPropertySection extends StatefulWidget {
   final DesignNode node;
   final EditorController controller;
+  final FormaThemeTokens tokens;
   final bool isDark;
 
   const TypographyPropertySection({
     super.key,
     required this.node,
     required this.controller,
+    required this.tokens,
     required this.isDark,
   });
 
@@ -1759,36 +1902,25 @@ class TypographyPropertySection extends StatefulWidget {
 
 class _TypographyPropertySectionState extends State<TypographyPropertySection> {
   late TextEditingController _textCtrl;
-  late TextEditingController _fontSizeCtrl;
-  late TextEditingController _customFontCtrl;
   final FocusNode _focusNode = FocusNode();
-  final FocusNode _fontSizeFocusNode = FocusNode();
 
   static const List<int> _fontWeights = [
-    100,
     300,
     400,
     500,
     600,
     700,
     800,
-    900,
   ];
 
   static const List<double> _quickSizes = [
-    12, 14, 16, 20, 24, 32, 48, 64, 96, 120
+    12, 14, 16, 20, 24, 32, 48, 64
   ];
 
   @override
   void initState() {
     super.initState();
     _textCtrl = TextEditingController(text: widget.node.textData?.text ?? '');
-    _fontSizeCtrl = TextEditingController(
-      text: (widget.node.textData?.fontSize ?? 16.0).toStringAsFixed(0),
-    );
-    _customFontCtrl = TextEditingController(
-      text: widget.node.textData?.fontFamily ?? '',
-    );
   }
 
   @override
@@ -1798,22 +1930,12 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
         (widget.node.textData?.text != _textCtrl.text && !_focusNode.hasFocus)) {
       _textCtrl.text = widget.node.textData?.text ?? '';
     }
-    if (oldWidget.node.id != widget.node.id ||
-        (!_fontSizeFocusNode.hasFocus)) {
-      final curVal = double.tryParse(_fontSizeCtrl.text);
-      if (curVal == null || (curVal - (widget.node.textData?.fontSize ?? 16.0)).abs() > 0.5) {
-        _fontSizeCtrl.text = (widget.node.textData?.fontSize ?? 16.0).toStringAsFixed(0);
-      }
-    }
   }
 
   @override
   void dispose() {
     _focusNode.dispose();
-    _fontSizeFocusNode.dispose();
     _textCtrl.dispose();
-    _fontSizeCtrl.dispose();
-    _customFontCtrl.dispose();
     super.dispose();
   }
 
@@ -1837,8 +1959,8 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
         return _FontPickerSheet(
           initialFont: t.fontFamily,
           isDark: widget.isDark,
+          tokens: widget.tokens,
           onFontSelected: (newFont) {
-            _customFontCtrl.text = newFont;
             _update(t.copyWith(fontFamily: newFont));
           },
         );
@@ -1849,6 +1971,7 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
   @override
   Widget build(BuildContext context) {
     final t = widget.node.textData ?? const TextNodeData();
+    final tokens = widget.tokens;
     final isDark = widget.isDark;
 
     TextStyle activeFontStyle;
@@ -1858,497 +1981,377 @@ class _TypographyPropertySectionState extends State<TypographyPropertySection> {
       activeFontStyle = TextStyle(fontFamily: t.fontFamily, fontSize: 13, fontWeight: FontWeight.w600);
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'TYPOGRAPHY',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.8,
-                color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+    return PropertySectionCard(
+      title: 'TYPOGRAPHY',
+      icon: Icons.title_rounded,
+      tokens: tokens,
+      isDark: isDark,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: () => CanvasViewport.showInPlaceTextEditor(context, widget.node, widget.controller),
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.open_in_full_rounded, size: 11, color: tokens.accent),
+                  const SizedBox(width: 3),
+                  Text(
+                    'Edit',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: tokens.accent),
+                  ),
+                ],
               ),
             ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                InkWell(
-                  onTap: () => CanvasViewport.showInPlaceTextEditor(context, widget.node, widget.controller),
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    child: Row(
+          ),
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: () => _showFontPickerModal(context, t),
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.font_download_rounded, size: 12, color: tokens.accent),
+                  const SizedBox(width: 3),
+                  Text(
+                    'Fonts',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: tokens.accent),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Text Content Input
+          TextField(
+            controller: _textCtrl,
+            focusNode: _focusNode,
+            maxLines: 3,
+            minLines: 1,
+            style: TextStyle(
+              fontSize: 12,
+              color: tokens.textMain,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Enter text content...',
+              hintStyle: TextStyle(fontSize: 11, color: tokens.textMuted),
+              filled: true,
+              fillColor: tokens.wellBg,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: tokens.borderSubtle),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: tokens.borderSubtle),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: tokens.accent, width: 1.5),
+              ),
+            ),
+            onChanged: (val) => _update(t.copyWith(text: val)),
+          ),
+          const SizedBox(height: 8),
+
+          // Font Family Selector Tile
+          InkWell(
+            onTap: () => _showFontPickerModal(context, t),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: tokens.wellBg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: tokens.borderSubtle, width: 1.0),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.text_fields_rounded, size: 16, color: tokens.accent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.open_in_full_rounded, size: 12, color: FormaColors.primaryBlue),
-                        const SizedBox(width: 4),
-                        const Text(
-                          'Edit Full',
-                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: FormaColors.primaryBlue),
+                        Text(
+                          'FONT FAMILY',
+                          style: TextStyle(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.bold,
+                            color: tokens.textMuted,
+                          ),
+                        ),
+                        Text(
+                          t.fontFamily,
+                          style: activeFontStyle.copyWith(
+                            color: tokens.textMain,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(width: 6),
-                InkWell(
-                  onTap: () => _showFontPickerModal(context, t),
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.font_download_rounded, size: 13, color: FormaColors.primaryBlue),
-                        const SizedBox(width: 4),
-                        const Text(
-                          'Fonts',
-                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: FormaColors.primaryBlue),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // Text Content Input
-        TextField(
-          controller: _textCtrl,
-          focusNode: _focusNode,
-          maxLines: 3,
-          minLines: 1,
-          style: TextStyle(
-            fontSize: 12,
-            color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
-          ),
-          decoration: InputDecoration(
-            hintText: 'Enter text content...',
-            filled: true,
-            fillColor: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide.none,
-            ),
-          ),
-          onChanged: (val) => _update(t.copyWith(text: val)),
-        ),
-        const SizedBox(height: 10),
-
-        // Font Family Selector Tile (Renders Font in its own style)
-        InkWell(
-          onTap: () => _showFontPickerModal(context, t),
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+                  Icon(Icons.unfold_more_rounded, size: 16, color: tokens.textMuted),
+                ],
               ),
             ),
+          ),
+          const SizedBox(height: 8),
+
+          // Font Size Scrubber and Quick Presets
+          Row(
+            children: [
+              Expanded(
+                child: FormaTouchNudgeField(
+                  label: 'Size',
+                  value: t.fontSize,
+                  min: 4,
+                  max: 500,
+                  step: 1,
+                  onChanged: (val) => _update(t.copyWith(fontSize: val)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Quick size pills
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             child: Row(
-              children: [
-                const Icon(Icons.text_fields_rounded, size: 18, color: FormaColors.primaryBlue),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'FONT FAMILY',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        t.fontFamily,
-                        style: activeFontStyle.copyWith(
-                          color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.unfold_more_rounded,
-                  size: 18,
-                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-
-        // Font Weight Chips
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: _fontWeights.map((w) {
-              final isSel = t.fontWeight == w;
-              return GestureDetector(
-                onTap: () => _update(t.copyWith(fontWeight: w)),
-                child: Container(
-                  margin: const EdgeInsets.only(right: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isSel
-                        ? FormaColors.primaryBlue
-                        : (isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg),
+              children: _quickSizes.map((sz) {
+                final isSel = (t.fontSize - sz).abs() < 0.5;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: InkWell(
+                    onTap: () => _update(t.copyWith(fontSize: sz)),
                     borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    '$w',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: isSel ? Colors.white : null,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isSel ? tokens.accent.withValues(alpha: 0.18) : tokens.wellBg,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isSel ? tokens.accent : tokens.borderSubtle,
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Text(
+                        '${sz.toInt()}',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                          color: isSel ? tokens.accent : tokens.textMuted,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
+                );
+              }).toList(),
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
+          const SizedBox(height: 8),
 
-        // Font Size Input Row
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                height: 40,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+          // Font Weight Segmented Pills
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: _fontWeights.map((w) {
+                final isSel = t.fontWeight == w;
+                String label = '$w';
+                if (w == 300) label = 'Light';
+                if (w == 400) label = 'Regular';
+                if (w == 500) label = 'Medium';
+                if (w == 600) label = 'SemiBold';
+                if (w == 700) label = 'Bold';
+                if (w == 800) label = 'ExtraBold';
+
+                return Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: InkWell(
+                    onTap: () => _update(t.copyWith(fontWeight: w)),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isSel ? tokens.accent.withValues(alpha: 0.20) : tokens.wellBg,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isSel ? tokens.accent : tokens.borderSubtle,
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                          color: isSel ? tokens.accent : tokens.textMuted,
+                        ),
+                      ),
+                    ),
                   ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Alignment & Style Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Alignment Pills
+              Container(
+                decoration: BoxDecoration(
+                  color: tokens.wellBg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: tokens.borderSubtle, width: 1.0),
                 ),
                 child: Row(
                   children: [
-                    Text(
-                      'SIZE (PT)',
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-                      ),
+                    _buildTextIconButton(
+                      icon: Icons.format_align_left_rounded,
+                      isSelected: t.textAlign == TextAlign.left,
+                      tokens: tokens,
+                      onTap: () => _update(t.copyWith(textAlign: TextAlign.left)),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _fontSizeCtrl,
-                        focusNode: _fontSizeFocusNode,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          isDense: true,
-                        ),
-                        onChanged: (val) {
-                          final parsed = double.tryParse(val);
-                          if (parsed != null && parsed >= 4) {
-                            _update(t.copyWith(fontSize: parsed));
-                          }
-                        },
-                      ),
+                    _buildTextIconButton(
+                      icon: Icons.format_align_center_rounded,
+                      isSelected: t.textAlign == TextAlign.center,
+                      tokens: tokens,
+                      onTap: () => _update(t.copyWith(textAlign: TextAlign.center)),
+                    ),
+                    _buildTextIconButton(
+                      icon: Icons.format_align_right_rounded,
+                      isSelected: t.textAlign == TextAlign.right,
+                      tokens: tokens,
+                      onTap: () => _update(t.copyWith(textAlign: TextAlign.right)),
                     ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            // Quick stepper [+] / [-]
-            Row(
-              children: [
-                NeuIconButton(
-                  icon: Icons.remove_rounded,
-                  size: 32,
-                  iconSize: 15,
-                  onPressed: () {
-                    final next = math.max(6.0, t.fontSize - 2.0);
-                    _fontSizeCtrl.text = next.toStringAsFixed(0);
-                    _update(t.copyWith(fontSize: next));
-                  },
-                ),
-                const SizedBox(width: 4),
-                NeuIconButton(
-                  icon: Icons.add_rounded,
-                  size: 32,
-                  iconSize: 15,
-                  onPressed: () {
-                    final next = t.fontSize + 2.0;
-                    _fontSizeCtrl.text = next.toStringAsFixed(0);
-                    _update(t.copyWith(fontSize: next));
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
 
-        // Quick Preset Size Chips
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: _quickSizes.map((sz) {
-              final isSel = (t.fontSize - sz).abs() < 0.5;
-              return GestureDetector(
-                onTap: () {
-                  _fontSizeCtrl.text = sz.toStringAsFixed(0);
-                  _update(t.copyWith(fontSize: sz));
-                },
-                child: Container(
-                  margin: const EdgeInsets.only(right: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isSel
-                        ? FormaColors.primaryBlue.withValues(alpha: 0.2)
-                        : (isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: isSel
-                          ? FormaColors.primaryBlue
-                          : (isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+              // Style Pills (Italic, Underline, Strikethrough)
+              Container(
+                decoration: BoxDecoration(
+                  color: tokens.wellBg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: tokens.borderSubtle, width: 1.0),
+                ),
+                child: Row(
+                  children: [
+                    _buildTextIconButton(
+                      icon: Icons.format_italic_rounded,
+                      isSelected: t.isItalic,
+                      tokens: tokens,
+                      onTap: () => _update(t.copyWith(isItalic: !t.isItalic)),
                     ),
+                    _buildTextIconButton(
+                      icon: Icons.format_underlined_rounded,
+                      isSelected: t.underline,
+                      tokens: tokens,
+                      onTap: () => _update(t.copyWith(underline: !t.underline)),
+                    ),
+                    _buildTextIconButton(
+                      icon: Icons.format_strikethrough_rounded,
+                      isSelected: t.strikethrough,
+                      tokens: tokens,
+                      onTap: () => _update(t.copyWith(strikethrough: !t.strikethrough)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Auto Width vs Fixed Width Toggle Pill
+          InkWell(
+            onTap: () => _update(t.copyWith(isAutoWidth: !t.isAutoWidth)),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: tokens.wellBg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: tokens.borderSubtle, width: 1.0),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    t.isAutoWidth ? Icons.fit_screen_rounded : Icons.crop_free_rounded,
+                    size: 13,
+                    color: tokens.accent,
                   ),
-                  child: Text(
-                    '${sz.toInt()}',
+                  const SizedBox(width: 6),
+                  Text(
+                    t.isAutoWidth ? 'Auto-Fit Content Width' : 'Fixed Bounding Box Width',
                     style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
-                      color: isSel ? FormaColors.primaryBlue : null,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textMain,
                     ),
                   ),
-                ),
-              );
-            }).toList(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextIconButton({
+    required IconData icon,
+    required bool isSelected,
+    required FormaThemeTokens tokens,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: isSelected ? tokens.accent.withValues(alpha: 0.20) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Center(
+          child: Icon(
+            icon,
+            size: 14,
+            color: isSelected ? tokens.accent : tokens.textMuted,
           ),
         ),
-        const SizedBox(height: 10),
-
-        // 3-Column Metrics: Line Height, Letter Spacing, Word Spacing
-        Row(
-          children: [
-            Expanded(
-              child: FormaTouchNudgeField(
-                label: 'HEIGHT',
-                value: t.lineHeight,
-                min: 0.5,
-                step: 0.1,
-                onChanged: (v) => _update(t.copyWith(lineHeight: math.max(0.5, v))),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: FormaTouchNudgeField(
-                label: 'LETTER',
-                value: t.letterSpacing,
-                step: 0.5,
-                onChanged: (v) => _update(t.copyWith(letterSpacing: v)),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: FormaTouchNudgeField(
-                label: 'WORD',
-                value: t.wordSpacing,
-                step: 1.0,
-                onChanged: (v) => _update(t.copyWith(wordSpacing: v)),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-
-        // Text Transform (Casing)
-        Text(
-          'TEXT TRANSFORM',
-          style: TextStyle(
-            fontSize: 9.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
-            color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: TextTransformCase.values.map((tc) {
-            final isSel = t.textCase == tc;
-            return Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: InkWell(
-                  onTap: () => _update(t.copyWith(textCase: tc)),
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    height: 28,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: isSel
-                          ? FormaColors.primaryBlue
-                          : (isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: isSel
-                            ? FormaColors.primaryBlue
-                            : (isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
-                      ),
-                    ),
-                    child: Text(
-                      tc.label,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: isSel ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 10),
-
-        // Alignment (Left, Center, Right) & Style (Italic, Underline, Strikethrough)
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                NeuIconButton(
-                  icon: Icons.format_align_left_rounded,
-                  size: 30,
-                  iconSize: 15,
-                  isActive: t.textAlign == TextAlign.left,
-                  tooltip: 'Align Left',
-                  onPressed: () => _update(t.copyWith(textAlign: TextAlign.left)),
-                ),
-                const SizedBox(width: 4),
-                NeuIconButton(
-                  icon: Icons.format_align_center_rounded,
-                  size: 30,
-                  iconSize: 15,
-                  isActive: t.textAlign == TextAlign.center,
-                  tooltip: 'Align Center',
-                  onPressed: () => _update(t.copyWith(textAlign: TextAlign.center)),
-                ),
-                const SizedBox(width: 4),
-                NeuIconButton(
-                  icon: Icons.format_align_right_rounded,
-                  size: 30,
-                  iconSize: 15,
-                  isActive: t.textAlign == TextAlign.right,
-                  tooltip: 'Align Right',
-                  onPressed: () => _update(t.copyWith(textAlign: TextAlign.right)),
-                ),
-              ],
-            ),
-            Row(
-              children: [
-                NeuIconButton(
-                  icon: Icons.format_italic_rounded,
-                  size: 30,
-                  iconSize: 15,
-                  isActive: t.isItalic,
-                  tooltip: 'Italic',
-                  onPressed: () => _update(t.copyWith(isItalic: !t.isItalic)),
-                ),
-                const SizedBox(width: 4),
-                NeuIconButton(
-                  icon: Icons.format_underlined_rounded,
-                  size: 30,
-                  iconSize: 15,
-                  isActive: t.underline,
-                  tooltip: 'Underline',
-                  onPressed: () => _update(t.copyWith(underline: !t.underline)),
-                ),
-                const SizedBox(width: 4),
-                NeuIconButton(
-                  icon: Icons.format_strikethrough_rounded,
-                  size: 30,
-                  iconSize: 15,
-                  isActive: t.strikethrough,
-                  tooltip: 'Strikethrough',
-                  onPressed: () => _update(t.copyWith(strikethrough: !t.strikethrough)),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // Auto Width vs Fixed Width Toggle
-        Row(
-          children: [
-            Expanded(
-              child: InkWell(
-                onTap: () => _update(t.copyWith(isAutoWidth: !t.isAutoWidth)),
-                borderRadius: BorderRadius.circular(6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        t.isAutoWidth ? Icons.fit_screen_rounded : Icons.crop_free_rounded,
-                        size: 14,
-                        color: FormaColors.primaryBlue,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        t.isAutoWidth ? 'Auto-Fit Content Width' : 'Fixed Bounding Box Width',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
+      ),
     );
   }
 }
 
-/// Comprehensive, modern Google Font Picker with live font previews and categories.
 class _FontPickerSheet extends StatefulWidget {
   final String initialFont;
   final bool isDark;
+  final FormaThemeTokens tokens;
   final ValueChanged<String> onFontSelected;
 
   const _FontPickerSheet({
     required this.initialFont,
     required this.isDark,
+    required this.tokens,
     required this.onFontSelected,
   });
 
@@ -2397,7 +2400,7 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = widget.isDark;
+    final tokens = widget.tokens;
     final allFonts = _fontCategories[_selectedCategory] ?? _fontCategories['All']!;
     final query = _searchCtrl.text.toLowerCase().trim();
     final filteredFonts = allFonts.where((f) => f.toLowerCase().contains(query)).toList();
@@ -2405,8 +2408,9 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
       decoration: BoxDecoration(
-        color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
+        color: tokens.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border.all(color: tokens.borderSubtle),
       ),
       child: Column(
         children: [
@@ -2416,27 +2420,27 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
             width: 36,
             height: 4,
             decoration: BoxDecoration(
-              color: isDark ? Colors.white24 : Colors.black12,
+              color: tokens.borderSubtle,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
 
           // Header
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.font_download_rounded, color: FormaColors.primaryBlue, size: 22),
+                    Icon(Icons.font_download_rounded, color: tokens.accent, size: 20),
                     const SizedBox(width: 8),
                     Text(
                       'Typography Library',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
+                        color: tokens.textMain,
                       ),
                     ),
                   ],
@@ -2445,13 +2449,13 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
                   children: [
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: FormaColors.primaryBlue,
+                        backgroundColor: tokens.accent,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      icon: const Icon(Icons.file_upload_outlined, size: 16),
-                      label: const Text('Import Font File (.ttf/.otf)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      icon: const Icon(Icons.file_upload_outlined, size: 14),
+                      label: const Text('Import Font', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                       onPressed: () async {
                         try {
                           final result = await FilePicker.pickFile(
@@ -2475,9 +2479,9 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
                         } catch (_) {}
                       },
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 20),
+                      icon: const Icon(Icons.close_rounded, size: 18),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -2492,20 +2496,19 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
               decoration: BoxDecoration(
-                color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-                ),
+                color: tokens.wellBg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: tokens.borderSubtle),
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _customCtrl,
-                      style: const TextStyle(fontSize: 12),
-                      decoration: const InputDecoration(
-                        hintText: 'Type any Google Font (e.g. Space Grotesk)...',
+                      style: TextStyle(fontSize: 12, color: tokens.textMain),
+                      decoration: InputDecoration(
+                        hintText: 'Type any Google Font name...',
+                        hintStyle: TextStyle(fontSize: 11, color: tokens.textMuted),
                         border: InputBorder.none,
                         isDense: true,
                       ),
@@ -2519,30 +2522,35 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
                         Navigator.pop(context);
                       }
                     },
-                    child: const Text('Apply', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                    child: Text('Apply', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: tokens.accent)),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
 
           // Search Filter Bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (_) => setState(() {}),
-              style: const TextStyle(fontSize: 12.5),
-              decoration: InputDecoration(
-                hintText: 'Filter fonts...',
-                prefixIcon: const Icon(Icons.search_rounded, size: 18),
-                filled: true,
-                fillColor: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
+            child: Container(
+              height: 34,
+              decoration: BoxDecoration(
+                color: tokens.wellBg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: tokens.borderSubtle),
+              ),
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: (_) => setState(() {}),
+                style: TextStyle(fontSize: 12, color: tokens.textMain),
+                decoration: InputDecoration(
+                  hintText: 'Filter fonts by name...',
+                  hintStyle: TextStyle(fontSize: 11, color: tokens.textMuted),
+                  prefixIcon: Icon(Icons.search_rounded, size: 16, color: tokens.textMuted),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  border: InputBorder.none,
                 ),
               ),
             ),
@@ -2561,12 +2569,19 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
                   child: FilterChip(
                     label: Text(cat),
                     selected: isSel,
-                    selectedColor: FormaColors.primaryBlue.withValues(alpha: 0.2),
-                    checkmarkColor: FormaColors.primaryBlue,
+                    selectedColor: tokens.accent.withValues(alpha: 0.18),
+                    checkmarkColor: tokens.accent,
+                    backgroundColor: tokens.wellBg,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(
+                        color: isSel ? tokens.accent : tokens.borderSubtle,
+                      ),
+                    ),
                     labelStyle: TextStyle(
                       fontSize: 11,
                       fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
-                      color: isSel ? FormaColors.primaryBlue : null,
+                      color: isSel ? tokens.accent : tokens.textMuted,
                     ),
                     onSelected: (_) => setState(() => _selectedCategory = cat),
                   ),
@@ -2576,7 +2591,7 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
           ),
           const SizedBox(height: 8),
 
-          // Font List View with Live Preview in That Font!
+          // Font List View with Live Preview
           Expanded(
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -2588,9 +2603,9 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
 
                 TextStyle fontStyle;
                 try {
-                  fontStyle = GoogleFonts.getFont(font, fontSize: 16, fontWeight: FontWeight.w600);
+                  fontStyle = GoogleFonts.getFont(font, fontSize: 15, fontWeight: FontWeight.w600);
                 } catch (_) {
-                  fontStyle = TextStyle(fontFamily: font, fontSize: 16, fontWeight: FontWeight.w600);
+                  fontStyle = TextStyle(fontFamily: font, fontSize: 15, fontWeight: FontWeight.w600);
                 }
 
                 return InkWell(
@@ -2603,13 +2618,11 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? FormaColors.primaryBlue.withValues(alpha: 0.12)
-                          : (isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg),
+                          ? tokens.accent.withValues(alpha: 0.12)
+                          : tokens.wellBg,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: isSelected
-                            ? FormaColors.primaryBlue
-                            : (isDark ? FormaColors.darkBorder : FormaColors.lightBorder),
+                        color: isSelected ? tokens.accent : tokens.borderSubtle,
                         width: isSelected ? 1.5 : 1.0,
                       ),
                     ),
@@ -2622,16 +2635,16 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
                               Text(
                                 font,
                                 style: fontStyle.copyWith(
-                                  color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
+                                  color: tokens.textMain,
                                 ),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 'The quick brown fox jumps over the lazy dog',
                                 style: fontStyle.copyWith(
-                                  fontSize: 12,
+                                  fontSize: 11.5,
                                   fontWeight: FontWeight.normal,
-                                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                                  color: tokens.textMuted,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -2640,7 +2653,7 @@ class _FontPickerSheetState extends State<_FontPickerSheet> {
                           ),
                         ),
                         if (isSelected)
-                          const Icon(Icons.check_circle_rounded, color: FormaColors.primaryBlue, size: 20),
+                          Icon(Icons.check_circle_rounded, color: tokens.accent, size: 18),
                       ],
                     ),
                   ),

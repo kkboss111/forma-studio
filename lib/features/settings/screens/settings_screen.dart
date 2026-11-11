@@ -381,28 +381,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
-        title: Text(
+        title: const Text(
           'Settings & Preferences',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: isDark ? Colors.white : FormaColors.lightTextMain,
           ),
         ),
         actions: [
-          TextButton.icon(
-            onPressed: () {
-              notifier.resetToDefaults();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Settings reset to defaults.'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-            icon: const Icon(Icons.restart_alt_rounded, size: 16),
-            label: const Text('Reset Defaults'),
-          ),
+          if (MediaQuery.of(context).size.width >= 500)
+            TextButton.icon(
+              onPressed: () {
+                notifier.resetToDefaults();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Settings reset to defaults.'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.restart_alt_rounded, size: 16),
+              label: const Text('Reset Defaults'),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.restart_alt_rounded),
+              tooltip: 'Reset Defaults',
+              onPressed: () {
+                notifier.resetToDefaults();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Settings reset to defaults.'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
           const SizedBox(width: 8),
         ],
       ),
@@ -447,29 +461,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       right: 16,
                       bottom: 16,
                     ),
-                    child: isGlass
-                        ? LiquidGlassBox(
-                            radius: 20,
-                            blur: settings.glassBlur,
-                            opacity: settings.glassOpacity,
-                            hasSpecular: settings.glassSpecular,
-                            hasSheen: settings.glassSheen,
-                            padding: const EdgeInsets.all(24),
-                            child: _buildActiveTabContent(
-                              settings,
-                              notifier,
-                              isDark,
-                            ),
-                          )
-                        : NeuCard(
-                            radius: 20,
-                            padding: const EdgeInsets.all(24),
-                            child: _buildActiveTabContent(
-                              settings,
-                              notifier,
-                              isDark,
-                            ),
-                          ),
+                    child: _buildActiveTabContent(
+                      settings,
+                      notifier,
+                      isDark,
+                      isGlass,
+                    ),
                   ),
                 ),
               ],
@@ -501,33 +498,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const SizedBox(height: 8),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                    child: _buildActiveTabContent(
+                      settings,
+                      notifier,
+                      isDark,
+                      isGlass,
                     ),
-                    child: isGlass
-                        ? LiquidGlassBox(
-                            radius: 20,
-                            blur: settings.glassBlur,
-                            opacity: settings.glassOpacity,
-                            hasSpecular: settings.glassSpecular,
-                            hasSheen: settings.glassSheen,
-                            padding: const EdgeInsets.all(16),
-                            child: _buildActiveTabContent(
-                              settings,
-                              notifier,
-                              isDark,
-                            ),
-                          )
-                        : NeuCard(
-                            radius: 20,
-                            padding: const EdgeInsets.all(16),
-                            child: _buildActiveTabContent(
-                              settings,
-                              notifier,
-                              isDark,
-                            ),
-                          ),
                   ),
                 ),
               ],
@@ -577,26 +554,96 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  Widget _buildConfigCard({
+    required String title,
+    String? subtitle,
+    IconData? icon,
+    required List<Widget> children,
+    required bool isDark,
+    bool isGlass = false,
+    EdgeInsetsGeometry? padding,
+  }) {
+    final tokens = FormaTheme.tokensOf(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isGlass
+            ? tokens.surface
+            : (isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+            offset: const Offset(0, 2),
+            blurRadius: 8,
+          ),
+        ],
+      ),
+      padding: padding ?? const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 18, color: FormaColors.primaryBlue),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : FormaColors.lightTextMain,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 11.5,
+                height: 1.4,
+                color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          ...children,
+        ],
+      ),
+    );
+  }
+
   Widget _buildActiveTabContent(
     AppSettings settings,
     SettingsNotifier notifier,
     bool isDark,
+    bool isGlass,
   ) {
     switch (_selectedTabIndex) {
       case 0:
-        return _buildAppearanceTab(settings, notifier, isDark);
+        return _buildAppearanceTab(settings, notifier, isDark, isGlass);
       case 1:
-        return _buildEditorCanvasTab(settings, notifier, isDark);
+        return _buildEditorCanvasTab(settings, notifier, isDark, isGlass);
       case 2:
-        return _buildPerformanceTab(settings, notifier, isDark);
+        return _buildPerformanceTab(settings, notifier, isDark, isGlass);
       case 3:
-        return _buildStorageBackupTab(settings, notifier, isDark);
+        return _buildStorageBackupTab(settings, notifier, isDark, isGlass);
       case 4:
-        return _buildAdvancedTab(settings, notifier, isDark);
+        return _buildAdvancedTab(settings, notifier, isDark, isGlass);
       case 5:
-        return _buildShortcutsTab(isDark);
+        return _buildShortcutsTab(isDark, isGlass);
       case 6:
-        return _buildAboutTab(isDark);
+        return _buildAboutTab(isDark, isGlass);
       default:
         return const SizedBox();
     }
@@ -606,280 +653,282 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildAppearanceTab(
     AppSettings settings,
     SettingsNotifier notifier,
-    bool isDark,
-  ) {
+    bool isDark, [
+    bool isGlass = false,
+  ]) {
     return ListView(
       children: [
-        _buildSectionTitle('Theme & Visual Identity', isDark),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          children: FormaThemeMode.values.map((mode) {
-            final isSelected = settings.themeMode == mode;
-            String label;
-            IconData icon;
-            switch (mode) {
-              case FormaThemeMode.system:
-                label = 'System Default';
-                icon = Icons.brightness_auto_rounded;
-                break;
-              case FormaThemeMode.light:
-                label = 'Soft Neumorphic Light';
-                icon = Icons.light_mode_rounded;
-                break;
-              case FormaThemeMode.dark:
-                label = 'Deep Slate Dark';
-                icon = Icons.dark_mode_rounded;
-                break;
-              case FormaThemeMode.liquidGlass:
-                label = 'Liquid Glass';
-                icon = Icons.blur_on_rounded;
-                break;
-              case FormaThemeMode.glassmorphism:
-                label = 'Glassmorphism (CSS Showcase)';
-                icon = Icons.auto_awesome_rounded;
-                break;
-            }
+        _buildConfigCard(
+          title: 'Theme & Visual Identity',
+          subtitle: 'Select active canvas aesthetic, color tokens, and elevation model',
+          icon: Icons.palette_outlined,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            Column(
+              children: FormaThemeMode.values.map((mode) {
+                final isSelected = settings.themeMode == mode;
+                String label;
+                String desc;
+                IconData icon;
+                switch (mode) {
+                  case FormaThemeMode.system:
+                    label = 'System Default';
+                    desc = 'Syncs automatically with device system appearance';
+                    icon = Icons.brightness_auto_rounded;
+                    break;
+                  case FormaThemeMode.light:
+                    label = 'Soft Neumorphic Light';
+                    desc = 'Warm paper craft & crisp contrast tokens';
+                    icon = Icons.light_mode_rounded;
+                    break;
+                  case FormaThemeMode.dark:
+                    label = 'Deep Slate Dark';
+                    desc = 'Obsidian palette with deep slate tones';
+                    icon = Icons.dark_mode_rounded;
+                    break;
+                  case FormaThemeMode.liquidGlass:
+                    label = 'Liquid Glass';
+                    desc = 'Real-time backdrop blur & specular sheen';
+                    icon = Icons.blur_on_rounded;
+                    break;
+                  case FormaThemeMode.glassmorphism:
+                    label = 'Glassmorphism (CSS Showcase)';
+                    desc = 'Dynamic cosmic blur gradients & glow accents';
+                    icon = Icons.auto_awesome_rounded;
+                    break;
+                }
 
-            return InkWell(
-              onTap: () => _handleThemeSelection(mode, settings, notifier),
-              borderRadius: BorderRadius.circular(14),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isSelected
-                        ? FormaColors.primaryBlue
-                        : (isDark ? Colors.white24 : Colors.black12),
-                    width: isSelected ? 2 : 1,
-                  ),
-                  color: isSelected
-                      ? FormaColors.primaryBlue.withValues(alpha: 0.12)
-                      : (isDark
-                          ? Colors.white.withValues(alpha: 0.05)
-                          : Colors.white.withValues(alpha: 0.25)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      icon,
-                      size: 18,
-                      color: isSelected ? FormaColors.primaryBlue : null,
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12.0,
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.w500,
-                          color: isSelected ? FormaColors.primaryBlue : null,
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: InkWell(
+                    onTap: () => _handleThemeSelection(mode, settings, notifier),
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isSelected
+                              ? FormaColors.primaryBlue
+                              : (isDark ? Colors.white12 : Colors.black12),
+                          width: isSelected ? 2 : 1,
                         ),
+                        color: isSelected
+                            ? FormaColors.primaryBlue.withValues(alpha: 0.12)
+                            : (isDark
+                                ? Colors.white.withValues(alpha: 0.04)
+                                : Colors.black.withValues(alpha: 0.02)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? FormaColors.primaryBlue.withValues(alpha: 0.15)
+                                  : (isDark ? Colors.white10 : Colors.black12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              icon,
+                              size: 18,
+                              color: isSelected
+                                  ? FormaColors.primaryBlue
+                                  : (isDark ? Colors.white70 : Colors.black54),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                    color: isSelected
+                                        ? FormaColors.primaryBlue
+                                        : (isDark ? Colors.white : FormaColors.lightTextMain),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  desc,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                            size: 20,
+                            color: isSelected ? FormaColors.primaryBlue : (isDark ? Colors.white30 : Colors.black26),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 24),
-        if (settings.themeMode == FormaThemeMode.liquidGlass) ...[
-          _buildSectionTitle('Liquid Glass Shader Parameters', isDark),
-          const SizedBox(height: 12),
-          _buildSliderRow(
-            label: 'Backdrop Blur Strength',
-            value: settings.glassBlur,
-            min: 5.0,
-            max: 60.0,
-            unit: 'px',
-            onChanged: notifier.setGlassBlur,
-            isDark: isDark,
-          ),
-          _buildSliderRow(
-            label: 'Glass Panel Opacity',
-            value: settings.glassOpacity * 100,
-            min: 15.0,
-            max: 85.0,
-            unit: '%',
-            onChanged: (val) => notifier.setGlassOpacity(val / 100),
-            isDark: isDark,
-          ),
-          SwitchListTile(
-            title: const Text('Specular Light Highlight'),
-            subtitle: const Text('Luminous top-edge reflection simulation'),
-            value: settings.glassSpecular,
-            onChanged: notifier.toggleGlassSpecular,
-          ),
-          SwitchListTile(
-            title: const Text('Fluid Sheen Animation'),
-            subtitle: const Text('Soft angled ambient highlight overlay'),
-            value: settings.glassSheen,
-            onChanged: notifier.toggleGlassSheen,
-          ),
-          const Divider(height: 32),
-        ],
-
-        _buildSectionTitle('Layout & Primary Dock Placement', isDark),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Sidebar & Tool Dock Position',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Keep primary sidebar on Left or Right. Navigation snaps appropriately.',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<SidebarSide>(
-                  segments: const [
-                    ButtonSegment(
-                      value: SidebarSide.left,
-                      label: Text('Left'),
-                      icon: Icon(Icons.dock_rounded, size: 16),
-                    ),
-                    ButtonSegment(
-                      value: SidebarSide.right,
-                      label: Text('Right'),
-                      icon: Icon(Icons.vertical_split_rounded, size: 16),
-                    ),
-                  ],
-                  selected: {settings.sidebarPrimarySide},
-                  onSelectionChanged: (val) {
-                    if (val.isNotEmpty) {
-                      notifier.setSidebarPrimarySide(val.first);
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        _buildSectionTitle('Home Grid Card Density', isDark),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Recent & Template Card Sizing',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Compact fits 4 cards cleanly on mobile screens without scrolling.',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<CardDensity>(
-                  segments: const [
-                    ButtonSegment(
-                      value: CardDensity.compact,
-                      label: Text('Compact'),
-                    ),
-                    ButtonSegment(
-                      value: CardDensity.normal,
-                      label: Text('Normal'),
-                    ),
-                    ButtonSegment(
-                      value: CardDensity.spacious,
-                      label: Text('Spacious'),
-                    ),
-                  ],
-                  selected: {settings.cardDensity},
-                  onSelectionChanged: (val) {
-                    if (val.isNotEmpty) {
-                      notifier.setCardDensity(val.first);
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 32),
-        _buildSectionTitle('App Branding & Native Vector Insignia', isDark),
-        const SizedBox(height: 8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const FormaLogo(size: 48),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Forma Studio Vector Insignia',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Rendered dynamically with zero memory decode overhead and no refresh flicker. Standardized across Android, iOS, Windows, and Web.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark
-                          ? FormaColors.darkTextMuted
-                          : FormaColors.lightTextMuted,
-                      height: 1.4,
-                    ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+        if (settings.themeMode == FormaThemeMode.liquidGlass)
+          _buildConfigCard(
+            title: 'Liquid Glass Shader Parameters',
+            subtitle: 'Tune dynamic optical refraction, blur, and specular light highlights',
+            icon: Icons.blur_on_rounded,
+            isDark: isDark,
+            isGlass: isGlass,
+            children: [
+              _buildSliderRow(
+                label: 'Backdrop Blur Strength',
+                value: settings.glassBlur,
+                min: 5.0,
+                max: 60.0,
+                unit: 'px',
+                onChanged: notifier.setGlassBlur,
+                isDark: isDark,
+              ),
+              _buildSliderRow(
+                label: 'Glass Panel Opacity',
+                value: settings.glassOpacity * 100,
+                min: 15.0,
+                max: 85.0,
+                unit: '%',
+                onChanged: (val) => notifier.setGlassOpacity(val / 100),
+                isDark: isDark,
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Specular Light Highlight'),
+                subtitle: const Text('Luminous top-edge reflection simulation'),
+                value: settings.glassSpecular,
+                onChanged: notifier.toggleGlassSpecular,
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Fluid Sheen Animation'),
+                subtitle: const Text('Soft angled ambient highlight overlay'),
+                value: settings.glassSheen,
+                onChanged: notifier.toggleGlassSheen,
+              ),
+            ],
+          ),
+        _buildConfigCard(
+          title: 'Sidebar & Tool Dock Position',
+          subtitle: 'Keep primary sidebar on Left or Right. Navigation snaps appropriately.',
+          icon: Icons.dock_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<SidebarSide>(
+                segments: const [
+                  ButtonSegment(
+                    value: SidebarSide.left,
+                    label: Text('Left'),
+                    icon: Icon(Icons.dock_rounded, size: 16),
+                  ),
+                  ButtonSegment(
+                    value: SidebarSide.right,
+                    label: Text('Right'),
+                    icon: Icon(Icons.vertical_split_rounded, size: 16),
                   ),
                 ],
+                selected: {settings.sidebarPrimarySide},
+                onSelectionChanged: (val) {
+                  if (val.isNotEmpty) {
+                    notifier.setSidebarPrimarySide(val.first);
+                  }
+                },
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        _buildConfigCard(
+          title: 'Recent & Template Card Sizing',
+          subtitle: 'Compact fits 4 cards cleanly on mobile screens without scrolling.',
+          icon: Icons.grid_view_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<CardDensity>(
+                segments: const [
+                  ButtonSegment(
+                    value: CardDensity.compact,
+                    label: Text('Compact'),
+                  ),
+                  ButtonSegment(
+                    value: CardDensity.normal,
+                    label: Text('Normal'),
+                  ),
+                  ButtonSegment(
+                    value: CardDensity.spacious,
+                    label: Text('Spacious'),
+                  ),
+                ],
+                selected: {settings.cardDensity},
+                onSelectionChanged: (val) {
+                  if (val.isNotEmpty) {
+                    notifier.setCardDensity(val.first);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        _buildConfigCard(
+          title: 'App Branding & Native Vector Insignia',
+          subtitle: 'Vector icon engine with zero memory decode overhead',
+          icon: Icons.auto_awesome_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const FormaLogo(size: 48),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Forma Studio Vector Insignia',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Rendered dynamically with zero memory decode overhead and no refresh flicker. Standardized across Android, iOS, Windows, and Web.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark
+                              ? FormaColors.darkTextMuted
+                              : FormaColors.lightTextMuted,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -888,72 +937,89 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildEditorCanvasTab(
     AppSettings settings,
     SettingsNotifier notifier,
-    bool isDark,
-  ) {
+    bool isDark, [
+    bool isGlass = false,
+  ]) {
     return ListView(
       children: [
-        _buildSectionTitle('Snapping & Alignment Guides', isDark),
-        const SizedBox(height: 8),
-        SwitchListTile(
-          title: const Text('Snap to Grid'),
-          subtitle: const Text('Align object edges to the active canvas grid lines'),
-          value: settings.snapToGrid,
-          onChanged: notifier.toggleSnapToGrid,
-        ),
-        SwitchListTile(
-          title: const Text('Snap to Objects (Smart Guides)'),
-          subtitle: const Text(
-            'Show magenta alignment rays and distance tags when aligning with other nodes',
-          ),
-          value: settings.snapToObjects,
-          onChanged: notifier.toggleSnapToObjects,
-        ),
-        const Divider(height: 32),
-
-        _buildSectionTitle('Grid & Canvas Rules', isDark),
-        const SizedBox(height: 8),
-        _buildSliderRow(
-          label: 'Default Grid Size',
-          value: settings.defaultGridSize,
-          min: 4.0,
-          max: 64.0,
-          unit: 'pt',
-          onChanged: notifier.setDefaultGridSize,
+        _buildConfigCard(
+          title: 'Snapping & Alignment Guides',
+          subtitle: 'Intelligent magnetic snaps to grid lines and neighboring shape edges',
+          icon: Icons.grid_goldenratio_rounded,
           isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Snap to Grid'),
+              subtitle: const Text('Align object edges to the active canvas grid lines'),
+              value: settings.snapToGrid,
+              onChanged: notifier.toggleSnapToGrid,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Snap to Objects (Smart Guides)'),
+              subtitle: const Text(
+                'Show magenta alignment rays and distance tags when aligning with other nodes',
+              ),
+              value: settings.snapToObjects,
+              onChanged: notifier.toggleSnapToObjects,
+            ),
+          ],
         ),
-        SwitchListTile(
-          title: const Text('Show Canvas Rulers'),
-          subtitle: const Text(
-            'Display top and left pixel measurement rulers on the canvas viewport',
-          ),
-          value: settings.showRulers,
-          onChanged: notifier.toggleShowRulers,
+        _buildConfigCard(
+          title: 'Grid & Canvas Rules',
+          subtitle: 'Configure default grid spacing, pixel rulers, and zoom limits',
+          icon: Icons.straighten_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            _buildSliderRow(
+              label: 'Default Grid Size',
+              value: settings.defaultGridSize,
+              min: 4.0,
+              max: 64.0,
+              unit: 'pt',
+              onChanged: notifier.setDefaultGridSize,
+              isDark: isDark,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Show Canvas Rulers'),
+              subtitle: const Text(
+                'Display top and left pixel measurement rulers on the canvas viewport',
+              ),
+              value: settings.showRulers,
+              onChanged: notifier.toggleShowRulers,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Show Canvas Grid'),
+              subtitle: const Text('Display subtle background grid dots and alignment lines'),
+              value: settings.showGrid,
+              onChanged: notifier.toggleShowGrid,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Extended Zoom Limit (1% – 5000%)'),
+              subtitle: const Text(
+                'Allows extreme macro zoom into vector paths (up to 5000%) and birds-eye overview (down to 1%)',
+              ),
+              value: settings.extendedZoomLimit,
+              onChanged: notifier.toggleExtendedZoomLimit,
+            ),
+          ],
         ),
-        SwitchListTile(
-          title: const Text('Show Canvas Grid'),
-          subtitle: const Text('Display subtle background grid dots and alignment lines'),
-          value: settings.showGrid,
-          onChanged: notifier.toggleShowGrid,
+        _buildConfigCard(
+          title: 'UI Position & Layout Customizer',
+          subtitle: 'Drag & drop to customize where toolbar buttons appear in your dock',
+          icon: Icons.drag_indicator_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            _buildUiPositionCustomizer(isDark),
+          ],
         ),
-        SwitchListTile(
-          title: const Text('Extended Zoom Limit (1% – 5000%)'),
-          subtitle: const Text(
-            'Allows extreme macro zoom into vector paths (up to 5000%) and birds-eye overview (down to 1%)',
-          ),
-          value: settings.extendedZoomLimit,
-          onChanged: notifier.toggleExtendedZoomLimit,
-        ),
-        const Divider(height: 32),
-
-        // UI Position & Layout Customizer
-        _buildSectionTitle('UI Position & Layout Customizer', isDark),
-        const SizedBox(height: 8),
-        Text(
-          'Customize and drag & drop where your workspace buttons and tool docks are positioned:',
-          style: TextStyle(fontSize: 12, color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted),
-        ),
-        const SizedBox(height: 12),
-        _buildUiPositionCustomizer(isDark),
       ],
     );
   }
@@ -970,10 +1036,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: [
-              const Icon(Icons.drag_indicator_rounded, size: 18, color: FormaColors.primaryBlue),
-              const SizedBox(width: 8),
-              const Text(
+            children: const [
+              Icon(Icons.drag_indicator_rounded, size: 18, color: FormaColors.primaryBlue),
+              SizedBox(width: 8),
+              Text(
                 'Mobile & Canvas Dock Button Order',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
@@ -1044,40 +1110,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildPerformanceTab(
     AppSettings settings,
     SettingsNotifier notifier,
-    bool isDark,
-  ) {
+    bool isDark, [
+    bool isGlass = false,
+  ]) {
     return ListView(
       children: [
-        _buildSectionTitle('Rendering & Hardware Acceleration', isDark),
-        const SizedBox(height: 8),
-        SwitchListTile(
-          title: const Text('High Refresh Rate (120Hz ProMotion)'),
-          subtitle: const Text(
-            'Enables smoothest scrolling, panning, and interactive transformations',
-          ),
-          value: settings.highRefreshRate,
-          onChanged: (val) => notifier.toggleHighRefreshRate(val),
+        _buildConfigCard(
+          title: 'Rendering & Hardware Acceleration',
+          subtitle: 'Configure display refresh rate and graphics pipeline settings',
+          icon: Icons.speed_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('High Refresh Rate (120Hz ProMotion)'),
+              subtitle: const Text(
+                'Enables smoothest scrolling, panning, and interactive transformations',
+              ),
+              value: settings.highRefreshRate,
+              onChanged: (val) => notifier.toggleHighRefreshRate(val),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Reduce Blur on Low-End Devices'),
+              subtitle: const Text(
+                'Disables heavy backdrop filters to maintain locked 60 FPS',
+              ),
+              value: settings.reduceBlurForPerformance,
+              onChanged: notifier.toggleReduceBlur,
+            ),
+          ],
         ),
-        SwitchListTile(
-          title: const Text('Reduce Blur on Low-End Devices'),
-          subtitle: const Text(
-            'Disables heavy backdrop filters to maintain locked 60 FPS',
-          ),
-          value: settings.reduceBlurForPerformance,
-          onChanged: notifier.toggleReduceBlur,
-        ),
-        const Divider(height: 32),
-        _buildSectionTitle('Repaint Boundaries & Cache Isolation', isDark),
-        const SizedBox(height: 8),
-        const ListTile(
-          leading: Icon(Icons.speed_rounded, color: FormaColors.primaryBlue),
-          title: Text('Layered Repaint Boundaries'),
-          subtitle: Text('Active — isolates canvas repainting from UI chrome.'),
-        ),
-        const ListTile(
-          leading: Icon(Icons.memory_rounded, color: FormaColors.successGreen),
-          title: Text('Dynamic Vector Path Caching'),
-          subtitle: Text('Active — caches parsed SVG and bezier path bounds.'),
+        _buildConfigCard(
+          title: 'Repaint Boundaries & Cache Isolation',
+          subtitle: 'Active engine optimizations ensuring isolated GPU rasterization',
+          icon: Icons.memory_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: const [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.speed_rounded, color: FormaColors.primaryBlue),
+              title: Text('Layered Repaint Boundaries'),
+              subtitle: Text('Active — isolates canvas repainting from UI chrome.'),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.memory_rounded, color: FormaColors.successGreen),
+              title: Text('Dynamic Vector Path Caching'),
+              subtitle: Text('Active — caches parsed SVG and bezier path bounds.'),
+            ),
+          ],
         ),
       ],
     );
@@ -1087,188 +1171,176 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildStorageBackupTab(
     AppSettings settings,
     SettingsNotifier notifier,
-    bool isDark,
-  ) {
+    bool isDark, [
+    bool isGlass = false,
+  ]) {
     return ListView(
       children: [
-        _buildSectionTitle('Local Storage & Project Security', isDark),
-        const SizedBox(height: 8),
-        const Text(
-          'Forma Studio runs 100% offline. All designs, vector paths, pages, and components are securely persisted in local storage without third-party servers, accounts, or paid APIs.',
-          style: TextStyle(fontSize: 13, height: 1.5),
-        ),
-        const SizedBox(height: 16),
-
-        // Live Storage Statistics Card
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.05)
-                : Colors.black.withValues(alpha: 0.03),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        _buildConfigCard(
+          title: 'Local Storage & Project Security',
+          subtitle: 'Forma Studio runs 100% offline. All designs, vector paths, pages, and components are securely persisted in local storage without third-party servers, accounts, or paid APIs.',
+          icon: Icons.security_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Storage Footprint',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Storage Footprint',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        onPressed: _loadStorageStats,
+                        tooltip: 'Refresh statistics',
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    onPressed: _loadStorageStats,
-                    tooltip: 'Refresh statistics',
-                  ),
+                  const SizedBox(height: 8),
+                  if (_isLoadingStats)
+                    const LinearProgressIndicator()
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '$_totalProjectsCount',
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: FormaColors.primaryBlue,
+                                ),
+                              ),
+                              const Text(
+                                'Saved Projects',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                FileSaverService.formatFileSize(_totalProjectsBytes),
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: FormaColors.primaryBlue,
+                                ),
+                              ),
+                              const Text(
+                                'Document Data',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
-              const SizedBox(height: 8),
-              if (_isLoadingStats)
-                const LinearProgressIndicator()
-              else
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '$_totalProjectsCount',
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: FormaColors.primaryBlue,
-                            ),
-                          ),
-                          const Text(
-                            'Saved Projects',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            FileSaverService.formatFileSize(_totalProjectsBytes),
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: FormaColors.primaryBlue,
-                            ),
-                          ),
-                          const Text(
-                            'Document Data',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        _buildSectionTitle('Autosave Engine', isDark),
-        const SizedBox(height: 8),
-        _buildSliderRow(
-          label: 'Autosave Debounce Interval',
-          value: settings.autoSaveIntervalMs.toDouble(),
-          min: 200.0,
-          max: 2000.0,
-          unit: 'ms',
-          onChanged: (val) => notifier.setAutoSaveIntervalMs(val.round()),
-          isDark: isDark,
-        ),
-        const Divider(height: 32),
-
-        _buildSectionTitle('Backup & Portability', isDark),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          children: [
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: FormaColors.primaryBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              icon: const Icon(Icons.archive_rounded, size: 18),
-              label: const Text('Export Full Archive Backup (.forma)'),
-              onPressed: _exportFullBackup,
-            ),
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              icon: const Icon(Icons.unarchive_rounded, size: 18),
-              label: const Text('Restore Backup from File'),
-              onPressed: _restoreBackupFromFile,
             ),
           ],
         ),
-        const SizedBox(height: 20),
-
-        _buildSectionTitle('Cache Management', isDark),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+        _buildConfigCard(
+          title: 'Autosave Engine',
+          subtitle: 'Configurable background debounce timer to prevent disk write thrashing',
+          icon: Icons.save_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            _buildSliderRow(
+              label: 'Autosave Debounce Interval',
+              value: settings.autoSaveIntervalMs.toDouble(),
+              min: 200.0,
+              max: 2000.0,
+              unit: 'ms',
+              onChanged: (val) => notifier.setAutoSaveIntervalMs(val.round()),
+              isDark: isDark,
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Clear App Cache & Temporary Vectors',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
+          ],
+        ),
+        _buildConfigCard(
+          title: 'Backup & Portability',
+          subtitle: 'Full archive snapshots with all node hierarchies and design tokens',
+          icon: Icons.backup_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: FormaColors.primaryBlue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.archive_rounded, size: 18),
+                    label: const Text('Export Full Archive Backup (.forma)'),
+                    onPressed: _exportFullBackup,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Purge image decoding buffers and vector caches without deleting projects.',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.unarchive_rounded, size: 18),
+                    label: const Text('Restore Backup from File'),
+                    onPressed: _restoreBackupFromFile,
+                  ),
                 ),
+              ],
+            ),
+          ],
+        ),
+        _buildConfigCard(
+          title: 'Cache Management',
+          subtitle: 'Purge image decoding buffers and vector caches without deleting projects.',
+          icon: Icons.cleaning_services_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: FormaColors.dangerRed,
+                side: const BorderSide(color: FormaColors.dangerRed),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: FormaColors.dangerRed,
-                  side: const BorderSide(color: FormaColors.dangerRed),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const Icon(Icons.delete_sweep_rounded, size: 16),
-                onPressed: _clearAppCache,
-                label: const Text('Clear Cache'),
-              ),
-            ],
-          ),
+              icon: const Icon(Icons.delete_sweep_rounded, size: 16),
+              onPressed: _clearAppCache,
+              label: const Text('Clear Cache'),
+            ),
+          ],
         ),
       ],
     );
@@ -1278,158 +1350,138 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildAdvancedTab(
     AppSettings settings,
     SettingsNotifier notifier,
-    bool isDark,
-  ) {
+    bool isDark, [
+    bool isGlass = false,
+  ]) {
     return ListView(
       children: [
-        _buildSectionTitle('Screen Resolution Layout Lock (10 Presets)', isDark),
-        const SizedBox(height: 6),
-        const Text(
-          'Lock canvas layout or generate artboards matching exact phone, tablet, and desktop dimensions. Device brand names are stripped in favor of standard aspect ratios:',
-          style: TextStyle(fontSize: 12),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.black.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-            ),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String?>(
-              value: settings.lockedResolutionPreset,
-              isExpanded: true,
-              hint: const Text('Freeform Canvas (No resolution lock)'),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('Freeform Canvas (No lock)'),
+        _buildConfigCard(
+          title: 'Screen Resolution Layout Lock (10 Presets)',
+          subtitle: 'Lock canvas layout or generate artboards matching exact phone, tablet, and desktop dimensions. Device brand names are stripped in favor of standard aspect ratios:',
+          icon: Icons.aspect_ratio_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
                 ),
-                ...ResolutionPreset.presets.map((preset) {
-                  return DropdownMenuItem<String?>(
-                    value: preset.label,
-                    child: Text('${preset.category}: ${preset.label}'),
-                  );
-                }),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String?>(
+                  value: settings.lockedResolutionPreset,
+                  isExpanded: true,
+                  hint: const Text('Freeform Canvas (No resolution lock)'),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('Freeform Canvas (No lock)'),
+                    ),
+                    ...ResolutionPreset.presets.map((preset) {
+                      return DropdownMenuItem<String?>(
+                        value: preset.label,
+                        child: Text('${preset.category}: ${preset.label}'),
+                      );
+                    }),
+                  ],
+                  onChanged: (preset) {
+                    notifier.setLockedResolutionPreset(preset);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          preset == null
+                              ? 'Canvas set to Freeform.'
+                              : 'Locked canvas layout to $preset.',
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+        _buildConfigCard(
+          title: 'Developer Vector Path Engine',
+          subtitle: 'Includes touch-hold curvature dragging, interactive tangent handles, loop-closing snaps to first anchor, and draggable control points. Fully coded in the graphics kernel and hidden from the standard toolbar for official v1.0 release.',
+          icon: Icons.polyline_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: const [
+                Chip(
+                  avatar: Icon(Icons.check_circle_rounded, color: Colors.green, size: 16),
+                  label: Text('Kernel: v1.0.4-dev', style: TextStyle(fontSize: 11)),
+                ),
+                Chip(
+                  avatar: Icon(Icons.visibility_off_rounded, size: 16),
+                  label: Text('Toolbar Visibility: Hidden (Beta)', style: TextStyle(fontSize: 11)),
+                ),
               ],
-              onChanged: (preset) {
-                notifier.setLockedResolutionPreset(preset);
+            ),
+          ],
+        ),
+        _buildConfigCard(
+          title: 'Viewport Frustum Culling',
+          subtitle: 'Skips off-screen visual elements during canvas draw passes to maintain 120 FPS on heavy artboards.',
+          icon: Icons.crop_free_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: const [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.crop_free_rounded, color: FormaColors.primaryBlue),
+              title: Text('Frustum Culling for Deep Node Hierarchies'),
+              subtitle: Text(
+                'Active — keeps render cycles restricted to visible viewport bounds.',
+              ),
+            ),
+          ],
+        ),
+        _buildConfigCard(
+          title: 'Developer Settings & Code Generation',
+          subtitle: 'Export options for developer handoff and code inspection',
+          icon: Icons.code_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Enable Design-to-HTML Code Export'),
+              subtitle: const Text(
+                'Unlocks HTML5 & CSS web bundle export in the canvas Export and Share menus. When disabled, HTML export is completely hidden across the studio.',
+              ),
+              value: settings.enableHtmlCodeExport,
+              onChanged: (val) {
+                notifier.toggleEnableHtmlCodeExport(val);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      preset == null
-                          ? 'Canvas set to Freeform.'
-                          : 'Locked canvas layout to $preset.',
+                      val
+                          ? 'HTML Code Export unlocked in Export & Share menus.'
+                          : 'HTML Code Export disabled and hidden.',
                     ),
                     duration: const Duration(seconds: 2),
                   ),
                 );
               },
             ),
-          ),
-        ),
-        const Divider(height: 32),
-
-        _buildSectionTitle('Developer Vector Path Engine', isDark),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.05)
-                : Colors.black.withValues(alpha: 0.03),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.polyline_rounded, color: FormaColors.primaryBlue),
-                  SizedBox(width: 8),
-                  Text(
-                    'High-Precision Bézier Vector Engine',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Includes touch-hold curvature dragging, interactive tangent handles, loop-closing snaps to first anchor, and draggable control points. Fully coded in the graphics kernel and hidden from the standard toolbar for official v1.0 release.',
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.4,
-                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  Chip(
-                    avatar: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 16),
-                    label: const Text('Kernel: v1.0.4-dev', style: TextStyle(fontSize: 11)),
-                  ),
-                  Chip(
-                    avatar: const Icon(Icons.visibility_off_rounded, size: 16),
-                    label: const Text('Toolbar Visibility: Hidden (Beta)', style: TextStyle(fontSize: 11)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 32),
-
-        _buildSectionTitle('Viewport Frustum Culling', isDark),
-        const SizedBox(height: 8),
-        const ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: Icon(Icons.crop_free_rounded, color: FormaColors.primaryBlue),
-          title: Text('Frustum Culling for Deep Node Hierarchies'),
-          subtitle: Text(
-            'Skips off-screen visual elements during canvas draw passes to maintain 120 FPS on heavy artboards.',
-          ),
-        ),
-        const Divider(height: 32),
-        _buildSectionTitle('Developer Settings & Code Generation', isDark),
-        const SizedBox(height: 8),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Enable Design-to-HTML Code Export'),
-          subtitle: const Text(
-            'Unlocks HTML5 & CSS web bundle export in the canvas Export and Share menus. When disabled, HTML export is completely hidden across the studio.',
-          ),
-          value: settings.enableHtmlCodeExport,
-          onChanged: (val) {
-            notifier.toggleEnableHtmlCodeExport(val);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  val
-                      ? 'HTML Code Export unlocked in Export & Share menus.'
-                      : 'HTML Code Export disabled and hidden.',
-                ),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          },
+          ],
         ),
       ],
     );
   }
 
   // 6. Shortcuts Tab
-  Widget _buildShortcutsTab(bool isDark) {
+  Widget _buildShortcutsTab(bool isDark, [bool isGlass = false]) {
     final shortcuts = [
       ['V', 'Selection & Transformation Tool'],
       ['H', 'Hand Pan Tool (drag to move canvas)'],
@@ -1451,95 +1503,135 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return ListView(
       children: [
-        _buildSectionTitle('Figma-Compatible Hotkeys Reference', isDark),
-        const SizedBox(height: 12),
-        Table(
-          columnWidths: const {
-            0: FlexColumnWidth(1.2),
-            1: FlexColumnWidth(2.5),
-          },
-          children: shortcuts.map((item) {
-            return TableRow(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      item[0],
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+        _buildConfigCard(
+          title: 'Figma-Compatible Hotkeys Reference',
+          subtitle: 'Industry standard keyboard shortcuts for high-speed desktop & web editing',
+          icon: Icons.keyboard_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 450;
+                return Column(
+                  children: shortcuts.map((item) {
+                    final keycap = Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isDark ? Colors.white24 : Colors.black12,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            offset: const Offset(0, 1),
+                            blurRadius: 2,
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    item[1],
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: isDark ? Colors.white70 : FormaColors.lightTextMain,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }).toList(),
+                      child: Text(
+                        item[0],
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11.5,
+                          color: FormaColors.primaryBlue,
+                        ),
+                      ),
+                    );
+
+                    final description = Text(
+                      item[1],
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? FormaColors.darkTextMain : FormaColors.lightTextMain,
+                      ),
+                    );
+
+                    return Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+                        ),
+                      ),
+                      child: isNarrow
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                keycap,
+                                const SizedBox(height: 6),
+                                description,
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                keycap,
+                                const SizedBox(width: 12),
+                                Expanded(child: description),
+                              ],
+                            ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+          ],
         ),
       ],
     );
   }
 
   // 7. About Tab
-  Widget _buildAboutTab(bool isDark) {
+  Widget _buildAboutTab(bool isDark, [bool isGlass = false]) {
     return ListView(
       children: [
-        _buildSectionTitle('About Forma Studio', isDark),
-        const SizedBox(height: 16),
-        const Center(
-          child: Column(
-            children: [
-              FormaLogo(size: 56),
-              SizedBox(height: 12),
-              Text(
-                'FORMA STUDIO',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                ),
+        _buildConfigCard(
+          title: 'About Forma Studio',
+          subtitle: 'Professional vector design and responsive artboard suite',
+          icon: Icons.info_outline_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: [
+            const Center(
+              child: Column(
+                children: [
+                  FormaLogo(size: 56),
+                  SizedBox(height: 12),
+                  Text(
+                    'FORMA STUDIO',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'v0.3.0 (Studio Release)',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: FormaColors.primaryBlue,
+                    ),
+                  ),
+                ],
               ),
-              SizedBox(height: 4),
-              Text(
-                'v0.3.0 (Studio Release)',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: FormaColors.primaryBlue,
-                ),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Forma Studio is a professional, mobile-first visual design editor and vector prototyping suite built with Flutter and Dart.\n\n'
+              'Designed for high precision, offline independence, and aesthetic craft. Features include hierarchical node trees, auto-layout, real Bezier vector path editing, interactive prototype transitions, design tokens, timeline animation, and multi-format vector export.',
+              style: TextStyle(fontSize: 13, height: 1.6),
+            ),
+          ],
         ),
-        const SizedBox(height: 20),
-        const Text(
-          'Forma Studio is a professional, mobile-first visual design editor and vector prototyping suite built with Flutter and Dart.\n\n'
-          'Designed for high precision, offline independence, and aesthetic craft. Features include hierarchical node trees, auto-layout, real Bezier vector path editing, interactive prototype transitions, design tokens, timeline animation, and multi-format vector export.',
-          style: TextStyle(fontSize: 13, height: 1.6),
-        ),
-        const Divider(height: 32),
-
-        // Roadmap & Future Releases Section (100% Offline & Local Engine)
         _buildSectionTitle('Roadmap & Future Releases (Local First)', isDark),
         const SizedBox(height: 12),
         _buildRoadmapCard(
@@ -1636,19 +1728,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           accentColor: const Color(0xFF14B8A6),
           isDark: isDark,
         ),
-
-        const Divider(height: 32),
-        _buildSectionTitle('App Launcher Icon Replacement Guide (For Developers)', isDark),
-        const SizedBox(height: 8),
-        const Text(
-          'To replace the default launcher icons in native builds:\n'
-          '• Android: Replace the launcher icons in `android/app/src/main/res/mipmap-*/ic_launcher.png` (or use `flutter_launcher_icons`).\n'
-          '• iOS: Replace the icons inside `ios/Runner/Assets.xcassets/AppIcon.appiconset/`.\n'
-          '• PC / Windows: Replace `windows/runner/resources/app_icon.ico`.\n'
-          '• Web: Replace `web/favicon.png` and `web/icons/Icon-*.png`.',
-          style: TextStyle(fontSize: 12, height: 1.6),
+        _buildConfigCard(
+          title: 'App Launcher Icon Replacement Guide (For Developers)',
+          subtitle: 'Instructions for configuring release app icons on native platforms',
+          icon: Icons.app_shortcut_rounded,
+          isDark: isDark,
+          isGlass: isGlass,
+          children: const [
+            Text(
+              'To replace the default launcher icons in native builds:\n'
+              '• Android: Replace the launcher icons in `android/app/src/main/res/mipmap-*/ic_launcher.png` (or use `flutter_launcher_icons`).\n'
+              '• iOS: Replace the icons inside `ios/Runner/Assets.xcassets/AppIcon.appiconset/`.\n'
+              '• PC / Windows: Replace `windows/runner/resources/app_icon.ico`.\n'
+              '• Web: Replace `web/favicon.png` and `web/icons/Icon-*.png`.',
+              style: TextStyle(fontSize: 12, height: 1.6),
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
       ],
     );
   }
@@ -1663,13 +1759,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     required bool isDark,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: isDark
             ? accentColor.withValues(alpha: isTop3 ? 0.12 : 0.05)
             : accentColor.withValues(alpha: isTop3 ? 0.08 : 0.03),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isTop3
               ? accentColor.withValues(alpha: 0.6)
@@ -1681,88 +1777,100 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
                   color: accentColor.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, size: 16, color: accentColor),
+                child: Icon(icon, size: 18, color: accentColor),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              if (isTop3) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [accentColor, accentColor.withValues(alpha: 0.75)],
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.star_rounded, size: 11, color: Colors.white),
-                      SizedBox(width: 3),
-                      Text(
-                        'TOP 3 NEXT',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 6),
-              ],
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: isDark ? Colors.white12 : Colors.black12,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.bolt_rounded, size: 11, color: accentColor),
-                    const SizedBox(width: 2),
                     Text(
-                      '${score.toStringAsFixed(1)}/10',
-                      style: TextStyle(
-                        fontSize: 10,
+                      title,
+                      style: const TextStyle(
+                        fontSize: 13,
                         fontWeight: FontWeight.bold,
-                        color: accentColor,
                       ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (isTop3)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [accentColor, accentColor.withValues(alpha: 0.75)],
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.star_rounded, size: 11, color: Colors.white),
+                                SizedBox(width: 3),
+                                Text(
+                                  'TOP 3 NEXT',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : Colors.black.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: isDark ? Colors.white12 : Colors.black12,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.bolt_rounded, size: 11, color: accentColor),
+                              const SizedBox(width: 2),
+                              Text(
+                                '${score.toStringAsFixed(1)}/10 Priority',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: accentColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             description,
             style: TextStyle(
               fontSize: 11.5,
-              height: 1.4,
+              height: 1.45,
               color: isDark
                   ? FormaColors.darkTextMuted
                   : FormaColors.lightTextMuted,
@@ -1801,14 +1909,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w500,
-                  color: isDark ? Colors.white : FormaColors.lightTextMain,
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.white : FormaColors.lightTextMain,
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
                 '${value.toStringAsFixed(1)} $unit',
                 style: const TextStyle(

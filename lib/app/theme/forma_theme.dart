@@ -4,13 +4,18 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/forma_colors.dart';
 import '../../features/settings/models/app_settings.dart';
 
-/// Semantic token bundle defining visual attributes for each of Forma's 4 core themes.
+/// Semantic token bundle defining visual attributes for each of Forma's 4 core themes:
+/// 1. Light: Editorial craft, warm paper background, rich slate typography, delicate 1px borders, crisp contrasting accent colors.
+/// 2. Obsidian Dark: True OLED deep graphite/black background, multi-tiered dark surfaces, luminous electric accents, pristine typography.
+/// 3. Liquid Glass: Hyper-realistic Apple iOS 18/visionOS glassmorphism. Multi-layered blur, specular top-edge highlights, frosted semi-transparency with ImageFilter.blur, iridescent subtle border gradients, and high-clarity readability.
+/// 4. Cosmic Glassmorphism: Deep space/midnight backdrop with ethereal violet and cyan ambient glow, starlight luminescence, glowing boundary lines, and high-contrast text.
 class FormaThemeTokens extends ThemeExtension<FormaThemeTokens> {
   final FormaThemeMode mode;
   final bool isDark;
   final bool isGlass;
   final Color scaffoldBg;
   final Color surface;
+  final Color surfaceElevated;
   final Color wellBg;
   final Color border;
   final Color borderSubtle;
@@ -28,6 +33,7 @@ class FormaThemeTokens extends ThemeExtension<FormaThemeTokens> {
     required this.isGlass,
     required this.scaffoldBg,
     required this.surface,
+    this.surfaceElevated = const Color(0xFFFFFFFF),
     required this.wellBg,
     required this.border,
     required this.borderSubtle,
@@ -40,40 +46,68 @@ class FormaThemeTokens extends ThemeExtension<FormaThemeTokens> {
     required this.activeGlow,
   });
 
+  // ===========================================================================
+  // Semantic Aliases & Ergonomic Getters
+  // ===========================================================================
+  /// Background color alias (scaffoldBg).
+  Color get background => scaffoldBg;
+
+  /// Card surface color alias (surface).
+  Color get cardBg => surface;
+
+  /// Active glowing border / boundary aura alias (activeGlow).
+  Color get borderGlow => activeGlow;
+
+  /// Primary high-contrast typography alias (textMain).
+  Color get textPrimary => textMain;
+
+  /// Secondary muted typography alias (textMuted).
+  Color get textSecondary => textMuted;
+
+  /// Whether current theme is light mode.
+  bool get isLight => !isDark;
+
   @override
   FormaThemeTokens copyWith({
     FormaThemeMode? mode,
     bool? isDark,
     bool? isGlass,
     Color? scaffoldBg,
+    Color? background,
     Color? surface,
+    Color? cardBg,
+    Color? surfaceElevated,
     Color? wellBg,
     Color? border,
     Color? borderSubtle,
     Color? textMain,
+    Color? textPrimary,
     Color? textMuted,
+    Color? textSecondary,
     Color? accent,
     double? cardBlur,
     Color? specularRim,
     List<BoxShadow>? cardShadow,
     Color? activeGlow,
+    Color? borderGlow,
   }) {
     return FormaThemeTokens(
       mode: mode ?? this.mode,
       isDark: isDark ?? this.isDark,
       isGlass: isGlass ?? this.isGlass,
-      scaffoldBg: scaffoldBg ?? this.scaffoldBg,
-      surface: surface ?? this.surface,
+      scaffoldBg: background ?? scaffoldBg ?? this.scaffoldBg,
+      surface: cardBg ?? surface ?? this.surface,
+      surfaceElevated: surfaceElevated ?? this.surfaceElevated,
       wellBg: wellBg ?? this.wellBg,
       border: border ?? this.border,
       borderSubtle: borderSubtle ?? this.borderSubtle,
-      textMain: textMain ?? this.textMain,
-      textMuted: textMuted ?? this.textMuted,
+      textMain: textPrimary ?? textMain ?? this.textMain,
+      textMuted: textSecondary ?? textMuted ?? this.textMuted,
       accent: accent ?? this.accent,
       cardBlur: cardBlur ?? this.cardBlur,
       specularRim: specularRim ?? this.specularRim,
       cardShadow: cardShadow ?? this.cardShadow,
-      activeGlow: activeGlow ?? this.activeGlow,
+      activeGlow: borderGlow ?? activeGlow ?? this.activeGlow,
     );
   }
 
@@ -89,6 +123,7 @@ class FormaThemeTokens extends ThemeExtension<FormaThemeTokens> {
       isGlass: t < 0.5 ? isGlass : other.isGlass,
       scaffoldBg: Color.lerp(scaffoldBg, other.scaffoldBg, t) ?? scaffoldBg,
       surface: Color.lerp(surface, other.surface, t) ?? surface,
+      surfaceElevated: Color.lerp(surfaceElevated, other.surfaceElevated, t) ?? surfaceElevated,
       wellBg: Color.lerp(wellBg, other.wellBg, t) ?? wellBg,
       border: Color.lerp(border, other.border, t) ?? border,
       borderSubtle: Color.lerp(borderSubtle, other.borderSubtle, t) ?? borderSubtle,
@@ -106,12 +141,16 @@ class FormaThemeTokens extends ThemeExtension<FormaThemeTokens> {
 class FormaTheme {
   FormaTheme._();
 
+  // ===========================================================================
+  // 1. MODERN STUDIO LIGHT TOKENS (Editorial Craft & Warm Paper)
+  // ===========================================================================
   static const lightTokens = FormaThemeTokens(
     mode: FormaThemeMode.light,
     isDark: false,
     isGlass: false,
     scaffoldBg: FormaColors.lightBg,
     surface: FormaColors.lightSurface,
+    surfaceElevated: FormaColors.lightSurfaceElevated,
     wellBg: FormaColors.lightWellBg,
     border: FormaColors.lightBorder,
     borderSubtle: FormaColors.lightBorderSubtle,
@@ -121,18 +160,22 @@ class FormaTheme {
     cardBlur: 0.0,
     specularRim: Colors.transparent,
     cardShadow: [
-      BoxShadow(color: Color(0x0A0F172A), offset: Offset(0, 1), blurRadius: 3),
-      BoxShadow(color: Color(0x080F172A), offset: Offset(0, 6), blurRadius: 16, spreadRadius: -2),
+      BoxShadow(color: Color(0x0A1C1917), offset: Offset(0, 1), blurRadius: 3),
+      BoxShadow(color: Color(0x061C1917), offset: Offset(0, 6), blurRadius: 16, spreadRadius: -2),
     ],
-    activeGlow: Color(0x302563EB),
+    activeGlow: Color(0x252563EB),
   );
 
+  // ===========================================================================
+  // 2. OBSIDIAN STUDIO DARK TOKENS (True OLED Pitch Void & Multi-Tiered Surfaces)
+  // ===========================================================================
   static const darkTokens = FormaThemeTokens(
     mode: FormaThemeMode.dark,
     isDark: true,
     isGlass: false,
     scaffoldBg: FormaColors.darkBg,
     surface: FormaColors.darkSurface,
+    surfaceElevated: FormaColors.darkSurfaceElevated,
     wellBg: FormaColors.darkWellBg,
     border: FormaColors.darkBorder,
     borderSubtle: FormaColors.darkBorderSubtle,
@@ -140,54 +183,63 @@ class FormaTheme {
     textMuted: FormaColors.darkTextMuted,
     accent: FormaColors.darkAccent,
     cardBlur: 0.0,
-    specularRim: Color(0x0FFFFFFF),
+    specularRim: FormaColors.darkShadowLight,
     cardShadow: [
-      BoxShadow(color: Color(0x0FFFFFFF), offset: Offset(0, 1), blurRadius: 0),
-      BoxShadow(color: Color(0x66000000), offset: Offset(0, 8), blurRadius: 24, spreadRadius: -2),
+      BoxShadow(color: Color(0x14FFFFFF), offset: Offset(0, 1), blurRadius: 0),
+      BoxShadow(color: Color(0x80000000), offset: Offset(0, 8), blurRadius: 28, spreadRadius: -3),
     ],
     activeGlow: Color(0x4038BDF8),
   );
 
+  // ===========================================================================
+  // 3. LIQUID GLASS TOKENS (Apple iOS 18 / visionOS Fluid Glassmorphism)
+  // ===========================================================================
   static const liquidGlassTokens = FormaThemeTokens(
     mode: FormaThemeMode.liquidGlass,
     isDark: false,
     isGlass: true,
     scaffoldBg: Color(0xFFE0F2FE),
-    surface: Color(0xD9FFFFFF), // 85% frosted liquid white
-    wellBg: Color(0x8AFFFFFF), // 54% frosted well
-    border: Color(0xE6FFFFFF), // 90% specular white border
-    borderSubtle: Color(0x80FFFFFF),
-    textMain: Color(0xFF0F172A),
-    textMuted: Color(0xFF475569),
-    accent: Color(0xFF0284C7),
-    cardBlur: 24.0,
+    surface: FormaColors.liquidGlassCard,
+    surfaceElevated: FormaColors.liquidGlassCardElevated,
+    wellBg: FormaColors.liquidGlassWell,
+    border: FormaColors.liquidGlassBorder,
+    borderSubtle: FormaColors.liquidGlassBorderSubtle,
+    textMain: FormaColors.liquidGlassTextMain,
+    textMuted: FormaColors.liquidGlassTextMuted,
+    accent: FormaColors.liquidGlassCyan,
+    cardBlur: 28.0,
     specularRim: Color(0xFFFFFFFF),
     cardShadow: [
-      BoxShadow(color: Color(0x1A0284C7), offset: Offset(0, 8), blurRadius: 32, spreadRadius: -4),
-      BoxShadow(color: Color(0x4DFFFFFF), offset: Offset(0, 1), blurRadius: 1),
+      BoxShadow(color: Color(0x180284C7), offset: Offset(0, 10), blurRadius: 32, spreadRadius: -4),
+      BoxShadow(color: Color(0x60FFFFFF), offset: Offset(0, 1), blurRadius: 0),
     ],
-    activeGlow: Color(0x500284C7),
+    activeGlow: FormaColors.liquidGlassGlow,
   );
 
+  // ===========================================================================
+  // 4. COSMIC GLASSMORPHISM TOKENS (Deep Space Midnight & Starlight Luminescence)
+  // ===========================================================================
   static const glassmorphismTokens = FormaThemeTokens(
     mode: FormaThemeMode.glassmorphism,
     isDark: true,
     isGlass: true,
-    scaffoldBg: Color(0xFF080D1A),
-    surface: Color(0x1AFFFFFF), // 10% starlight frosted glass
-    wellBg: Color(0x1F000000), // 12% deep black space well
-    border: Color(0x2EFFFFFF), // 18% starlight edge
-    borderSubtle: Color(0x1AFFFFFF),
-    textMain: Color(0xFFF8FAFC),
-    textMuted: Color(0xB3E2E8F0),
-    accent: Color(0xFF818CF8),
-    cardBlur: 18.0,
+    scaffoldBg: FormaColors.cosmicBg,
+    surface: FormaColors.cosmicCard,
+    surfaceElevated: FormaColors.cosmicCardElevated,
+    wellBg: FormaColors.cosmicWell,
+    border: FormaColors.cosmicBorder,
+    borderSubtle: FormaColors.cosmicBorderSubtle,
+    textMain: FormaColors.cosmicTextMain,
+    textMuted: FormaColors.cosmicTextMuted,
+    accent: FormaColors.cosmicIndigo,
+    cardBlur: 20.0,
     specularRim: Color(0x40FFFFFF),
     cardShadow: [
-      BoxShadow(color: Color(0x66000000), offset: Offset(0, 16), blurRadius: 36),
-      BoxShadow(color: Color(0x20FFFFFF), offset: Offset(0, 1), blurRadius: 1),
+      BoxShadow(color: Color(0x80000000), offset: Offset(0, 16), blurRadius: 40, spreadRadius: -2),
+      BoxShadow(color: Color(0x25818CF8), offset: Offset(0, 2), blurRadius: 16),
+      BoxShadow(color: Color(0x35FFFFFF), offset: Offset(0, 1), blurRadius: 0),
     ],
-    activeGlow: Color(0x55818CF8),
+    activeGlow: FormaColors.cosmicBorderGlow,
   );
 
   /// Resolves the exact tokens for a given FormaThemeMode, respecting system brightness.
@@ -218,7 +270,9 @@ class FormaTheme {
     return theme.brightness == Brightness.dark ? darkTokens : lightTokens;
   }
 
-  /// 1. Modern Studio Light Theme (Pure White on Slate-50)
+  // ===========================================================================
+  // 1. MODERN STUDIO LIGHT THEME BUILDER (Editorial Warm Paper & Slate)
+  // ===========================================================================
   static ThemeData light() {
     final baseTextTheme = GoogleFonts.plusJakartaSansTextTheme();
 
@@ -240,12 +294,27 @@ class FormaTheme {
         onError: Colors.white,
       ),
       dividerColor: FormaColors.lightBorder,
+      dividerTheme: const DividerThemeData(
+        color: FormaColors.lightBorder,
+        thickness: 1,
+        space: 1,
+      ),
       cardColor: FormaColors.lightSurface,
       cardTheme: CardThemeData(
         color: FormaColors.lightSurface,
         elevation: 0,
+        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: FormaColors.lightBorder, width: 1),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: FormaColors.lightSurface,
+        elevation: 12,
+        shadowColor: const Color(0x181C1917),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: FormaColors.lightBorder, width: 1),
         ),
       ),
@@ -260,7 +329,49 @@ class FormaTheme {
         backgroundColor: FormaColors.lightWellBg,
         side: const BorderSide(color: FormaColors.lightBorder, width: 1),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: FormaColors.lightTextMain),
+        labelStyle: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: FormaColors.lightTextMain,
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: FormaColors.lightWellBg,
+        hoverColor: FormaColors.lightWellBg,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: FormaColors.lightBorder, width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: FormaColors.lightBorder, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: FormaColors.lightAccent, width: 1.5),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: FormaColors.lightAccent,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          elevation: 0,
+          foregroundColor: FormaColors.lightTextMain,
+          side: const BorderSide(color: FormaColors.lightBorder, width: 1),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        ),
       ),
       textTheme: baseTextTheme.copyWith(
         displaySmall: baseTextTheme.displaySmall?.copyWith(
@@ -323,7 +434,9 @@ class FormaTheme {
     );
   }
 
-  /// 2. Obsidian Studio Dark Theme (Deep Void Black on Slate-900)
+  // ===========================================================================
+  // 2. OBSIDIAN STUDIO DARK THEME BUILDER (True OLED Pitch & Multi-Tiered Surfaces)
+  // ===========================================================================
   static ThemeData dark() {
     final baseTextTheme = GoogleFonts.plusJakartaSansTextTheme(
       ThemeData(brightness: Brightness.dark).textTheme,
@@ -347,12 +460,27 @@ class FormaTheme {
         onError: Colors.white,
       ),
       dividerColor: FormaColors.darkBorder,
+      dividerTheme: const DividerThemeData(
+        color: FormaColors.darkBorder,
+        thickness: 1,
+        space: 1,
+      ),
       cardColor: FormaColors.darkSurface,
       cardTheme: CardThemeData(
         color: FormaColors.darkSurface,
         elevation: 0,
+        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: FormaColors.darkBorder, width: 1),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: FormaColors.darkSurfaceElevated,
+        elevation: 16,
+        shadowColor: Colors.black,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: FormaColors.darkBorder, width: 1),
         ),
       ),
@@ -367,7 +495,49 @@ class FormaTheme {
         backgroundColor: FormaColors.darkWellBg,
         side: const BorderSide(color: FormaColors.darkBorder, width: 1),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: FormaColors.darkTextMain),
+        labelStyle: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: FormaColors.darkTextMain,
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: FormaColors.darkWellBg,
+        hoverColor: FormaColors.darkWellBg,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: FormaColors.darkBorder, width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: FormaColors.darkBorder, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: FormaColors.darkAccent, width: 1.5),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: FormaColors.darkAccent,
+          foregroundColor: FormaColors.darkBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          elevation: 0,
+          foregroundColor: FormaColors.darkTextMain,
+          side: const BorderSide(color: FormaColors.darkBorder, width: 1),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        ),
       ),
       textTheme: baseTextTheme.copyWith(
         displaySmall: baseTextTheme.displaySmall?.copyWith(
@@ -416,9 +586,9 @@ class FormaTheme {
           border: Border.all(color: FormaColors.darkBorder),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.35),
+              color: Colors.black.withValues(alpha: 0.45),
               offset: const Offset(0, 4),
-              blurRadius: 10,
+              blurRadius: 12,
             ),
           ],
         ),
@@ -431,7 +601,9 @@ class FormaTheme {
     );
   }
 
-  /// 3. Liquid Glass Theme (macOS Sonoma / visionOS Translucency)
+  // ===========================================================================
+  // 3. LIQUID GLASS THEME BUILDER (Apple iOS 18 / visionOS Translucency)
+  // ===========================================================================
   static ThemeData liquidGlass() {
     final baseTextTheme = GoogleFonts.plusJakartaSansTextTheme();
 
@@ -447,33 +619,47 @@ class FormaTheme {
         secondary: FormaColors.liquidGlassSky,
         onSecondary: Colors.white,
         surface: FormaColors.liquidGlassCard,
-        onSurface: Color(0xFF0F172A),
-        surfaceContainerHighest: Color(0x60FFFFFF),
+        onSurface: FormaColors.liquidGlassTextMain,
+        surfaceContainerHighest: FormaColors.liquidGlassWell,
         error: FormaColors.dangerRed,
         onError: Colors.white,
       ),
       dividerColor: const Color(0x350284C7),
+      dividerTheme: const DividerThemeData(
+        color: Color(0x350284C7),
+        thickness: 1,
+        space: 1,
+      ),
       cardColor: FormaColors.liquidGlassCard,
       cardTheme: CardThemeData(
         color: FormaColors.liquidGlassCard,
         elevation: 0,
+        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
           side: const BorderSide(color: FormaColors.liquidGlassBorder, width: 1.2),
         ),
       ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: FormaColors.liquidGlassCardElevated,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: FormaColors.liquidGlassBorder, width: 1.5),
+        ),
+      ),
       textTheme: baseTextTheme.copyWith(
         displaySmall: baseTextTheme.displaySmall?.copyWith(
-          color: const Color(0xFF0F172A),
+          color: FormaColors.liquidGlassTextMain,
           fontWeight: FontWeight.w800,
           letterSpacing: -0.8,
         ),
         headlineMedium: baseTextTheme.headlineMedium?.copyWith(
-          color: const Color(0xFF0F172A),
+          color: FormaColors.liquidGlassTextMain,
           fontWeight: FontWeight.w800,
         ),
         titleLarge: baseTextTheme.titleLarge?.copyWith(
-          color: const Color(0xFF0F172A),
+          color: FormaColors.liquidGlassTextMain,
           fontWeight: FontWeight.w700,
         ),
         titleMedium: baseTextTheme.titleMedium?.copyWith(
@@ -481,7 +667,7 @@ class FormaTheme {
           fontWeight: FontWeight.w700,
         ),
         bodyLarge: baseTextTheme.bodyLarge?.copyWith(
-          color: const Color(0xFF0F172A),
+          color: FormaColors.liquidGlassTextMain,
           fontWeight: FontWeight.w500,
         ),
         bodyMedium: baseTextTheme.bodyMedium?.copyWith(
@@ -489,7 +675,7 @@ class FormaTheme {
           fontWeight: FontWeight.w400,
         ),
         bodySmall: baseTextTheme.bodySmall?.copyWith(
-          color: const Color(0xFF475569),
+          color: FormaColors.liquidGlassTextMuted,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -508,7 +694,9 @@ class FormaTheme {
     );
   }
 
-  /// 4. Cosmic Glassmorphism Theme (Dark Nebula Violet & Starlight Gold)
+  // ===========================================================================
+  // 4. COSMIC GLASSMORPHISM THEME BUILDER (Midnight Nebula & Starlight Luminescence)
+  // ===========================================================================
   static ThemeData glassmorphism() {
     final baseTextTheme = GoogleFonts.plusJakartaSansTextTheme(
       ThemeData(brightness: Brightness.dark).textTheme,
@@ -528,33 +716,47 @@ class FormaTheme {
         tertiary: FormaColors.cosmicCyan,
         onTertiary: Colors.white,
         surface: FormaColors.cosmicCard,
-        onSurface: Color(0xFFF8FAFC),
-        surfaceContainerHighest: Color(0x20FFFFFF),
+        onSurface: FormaColors.cosmicTextMain,
+        surfaceContainerHighest: FormaColors.cosmicWell,
         error: FormaColors.dangerRed,
         onError: Colors.white,
       ),
       dividerColor: const Color(0x30FFFFFF),
+      dividerTheme: const DividerThemeData(
+        color: Color(0x30FFFFFF),
+        thickness: 1,
+        space: 1,
+      ),
       cardColor: FormaColors.cosmicCard,
       cardTheme: CardThemeData(
         color: FormaColors.cosmicCard,
         elevation: 0,
+        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
           side: const BorderSide(color: FormaColors.cosmicBorder, width: 1.2),
         ),
       ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: const Color(0xE60D1224),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: FormaColors.cosmicBorder, width: 1.5),
+        ),
+      ),
       textTheme: baseTextTheme.copyWith(
         displaySmall: baseTextTheme.displaySmall?.copyWith(
-          color: const Color(0xFFF8FAFC),
+          color: FormaColors.cosmicTextMain,
           fontWeight: FontWeight.w800,
           letterSpacing: -0.8,
         ),
         headlineMedium: baseTextTheme.headlineMedium?.copyWith(
-          color: const Color(0xFFF8FAFC),
+          color: FormaColors.cosmicTextMain,
           fontWeight: FontWeight.w800,
         ),
         titleLarge: baseTextTheme.titleLarge?.copyWith(
-          color: const Color(0xFFF8FAFC),
+          color: FormaColors.cosmicTextMain,
           fontWeight: FontWeight.w700,
         ),
         titleMedium: baseTextTheme.titleMedium?.copyWith(
@@ -562,7 +764,7 @@ class FormaTheme {
           fontWeight: FontWeight.w700,
         ),
         bodyLarge: baseTextTheme.bodyLarge?.copyWith(
-          color: const Color(0xFFF8FAFC),
+          color: FormaColors.cosmicTextMain,
           fontWeight: FontWeight.w500,
         ),
         bodyMedium: baseTextTheme.bodyMedium?.copyWith(
@@ -570,7 +772,7 @@ class FormaTheme {
           fontWeight: FontWeight.w400,
         ),
         bodySmall: baseTextTheme.bodySmall?.copyWith(
-          color: const Color(0xCCCBD5E1),
+          color: FormaColors.cosmicTextMuted,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -589,21 +791,20 @@ class FormaTheme {
     );
   }
 
-  /// Ambient Cosmic Radial Gradient accurately reproducing the CSS showcase:
-  /// radial-gradient(circle at 15% 20%, #431d77 0%, transparent 45%),
-  /// radial-gradient(circle at 85% 15%, #b12a6f 0%, transparent 40%),
-  /// radial-gradient(circle at 50% 90%, #0c7585 0%, #07192f 55%, #050b14 100%)
+  /// Ambient Cosmic Radial Gradient accurately reproducing the deep space nebula showcase:
+  /// radial-gradient with deep nebula violet, interstellar purple, and cyan abyss void.
   static const BoxDecoration glassmorphismCosmicGradient = BoxDecoration(
-    color: Color(0xFF080D1A),
+    color: Color(0xFF060913),
     gradient: RadialGradient(
-      center: Alignment(0.0, -0.4),
-      radius: 1.4,
+      center: Alignment(-0.3, -0.4),
+      radius: 1.5,
       colors: [
         Color(0xFF431D77), // Deep nebula violet
-        Color(0xFF1E1035), // Cosmic purple
-        Color(0xFF080D1A), // Space void
+        Color(0xFF1F103A), // Interstellar purple
+        Color(0xFF0A0F22), // Deep starlight navy
+        Color(0xFF060913), // Space void midnight
       ],
-      stops: [0.0, 0.45, 1.0],
+      stops: [0.0, 0.35, 0.70, 1.0],
     ),
   );
 }

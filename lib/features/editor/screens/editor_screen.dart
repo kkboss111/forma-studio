@@ -46,6 +46,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
   final FocusNode _focusNode = FocusNode();
   bool _showLayersSheet = false;
   bool _showPropertiesSheet = false;
+  bool _leftSidebarOpen = true;
+  bool _rightSidebarOpen = true;
 
   @override
   void initState() {
@@ -122,45 +124,63 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
     String currentName,
   ) async {
     final textController = TextEditingController(text: currentName);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tokens = FormaTheme.tokensOf(context);
 
     final newName = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        backgroundColor: tokens.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: tokens.borderSubtle),
+        ),
+        title: Row(
           children: [
-            Icon(Icons.edit_note_rounded, color: FormaColors.primaryBlue),
-            SizedBox(width: 8),
-            Text('Rename Document', style: TextStyle(fontSize: 16)),
+            Icon(Icons.edit_note_rounded, color: tokens.accent),
+            const SizedBox(width: 8),
+            Text(
+              'Rename Document',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: tokens.textMain),
+            ),
           ],
         ),
         content: TextField(
           controller: textController,
           autofocus: true,
+          style: TextStyle(color: tokens.textMain, fontSize: 13),
           decoration: InputDecoration(
             filled: true,
-            fillColor: isDark ? FormaColors.darkWellBg : FormaColors.lightWellBg,
+            fillColor: tokens.wellBg,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide.none,
+              borderSide: BorderSide(color: tokens.borderSubtle),
             ),
-            hintText: 'Enter document name',
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: tokens.borderSubtle),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: tokens.accent, width: 1.5),
+            ),
+            hintText: 'Enter document name...',
+            hintStyle: TextStyle(color: tokens.textMuted, fontSize: 12),
           ),
           onSubmitted: (val) => Navigator.pop(ctx, val),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: TextStyle(color: tokens.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: FormaColors.primaryBlue,
+              backgroundColor: tokens.accent,
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, textController.text),
-            child: const Text('Rename', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('Rename', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -268,7 +288,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
   ) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
-    // Do NOT hijack keys (especially backspace or delete) when typing in text fields
+    // Do NOT hijack keys when typing in text fields
     final primaryFocus = FocusManager.instance.primaryFocus;
     if (primaryFocus != null && primaryFocus != node) {
       final focusedWidget = primaryFocus.context?.widget;
@@ -282,6 +302,26 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
         HardwareKeyboard.instance.isControlPressed ||
         HardwareKeyboard.instance.isMetaPressed;
     final isShift = HardwareKeyboard.instance.isShiftPressed;
+
+    // Sidebar toggle shortcuts
+    if (isCtrl && event.logicalKey == LogicalKeyboardKey.bracketLeft) {
+      setState(() => _leftSidebarOpen = !_leftSidebarOpen);
+      return KeyEventResult.handled;
+    }
+
+    if (isCtrl && event.logicalKey == LogicalKeyboardKey.bracketRight) {
+      setState(() => _rightSidebarOpen = !_rightSidebarOpen);
+      return KeyEventResult.handled;
+    }
+
+    if (isCtrl && event.logicalKey == LogicalKeyboardKey.backslash) {
+      setState(() {
+        final anyOpen = _leftSidebarOpen || _rightSidebarOpen;
+        _leftSidebarOpen = !anyOpen;
+        _rightSidebarOpen = !anyOpen;
+      });
+      return KeyEventResult.handled;
+    }
 
     if (isCtrl && event.logicalKey == LogicalKeyboardKey.keyZ) {
       if (isShift) {
@@ -464,142 +504,191 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
         autofocus: true,
         onKeyEvent: (node, event) => _handleKey(node, event, controller, state),
         child: Scaffold(
-        backgroundColor: isGlass
-            ? Colors.transparent
-            : (isDark ? FormaColors.darkBg : FormaColors.lightBg),
-        body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final orientation = MediaQuery.of(context).orientation;
-              final layoutType = FormaResponsive.getLayoutType(
-                constraints,
-                orientation,
-              );
+          backgroundColor: isGlass
+              ? Colors.transparent
+              : (isDark ? FormaColors.darkBg : FormaColors.lightBg),
+          body: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final orientation = MediaQuery.of(context).orientation;
+                final layoutType = FormaResponsive.getLayoutType(
+                  constraints,
+                  orientation,
+                );
+                final isDesktop = layoutType == DeviceLayoutType.tabletOrDesktop;
 
-              return Column(
-                children: [
-                  // --- TOP BAR ---
-                  _buildTopBar(
-                    context,
-                    state,
-                    controller,
-                    layoutType,
-                    isDark,
-                    isGlass,
-                  ),
+                return Column(
+                  children: [
+                    // --- TOP BAR WITH BREADCRUMBS ---
+                    _buildTopBar(
+                      context,
+                      state,
+                      controller,
+                      layoutType,
+                      tokens,
+                      isDark,
+                      isGlass,
+                    ),
 
-                  // --- PAGES & CANVASES TAB BAR ---
-                  _buildPagesTabBar(context, state, controller, isDark, isGlass),
+                    // --- PAGES & CANVASES TAB BAR ---
+                    _buildPagesTabBar(context, state, controller, tokens, isDark, isGlass),
 
-                  // --- MAIN EDITOR WORKSPACE ---
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        Row(
-                          children: [
-                            // Left Layers Panel (Tablets & Desktop)
-                            if (layoutType == DeviceLayoutType.tabletOrDesktop)
-                              LayersPanel(project: widget.project),
-
-                            // Center Canvas (Full screen on phones & landscape mobile)
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Expanded(
-                                    child: CanvasViewport(project: widget.project),
-                                  ),
-                                  if (state.showTimelinePanel)
-                                    TimelinePanel(
-                                      timeline: state.timeline,
-                                      currentTimeMs: state.currentTimelineMs,
-                                      isPlaying: state.isPlayingTimeline,
-                                      selectedNodeId: state.primarySelectedId,
-                                      onTogglePlay: () => controller.togglePlayAnimation(),
-                                      onScrub: (ms) => controller.setTimelineScrub(ms),
-                                      onAddKeyframe: (prop) => controller.addKeyframeForSelectedNode(property: prop),
-                                      onDeleteKeyframe: () => controller.deleteKeyframeAtPlayhead(),
-                                      onToggleLoop: () => controller.toggleTimelineLoop(),
-                                      onFpsChanged: (fps) => controller.setTimelineFps(fps),
-                                      onSnapPrev: () => controller.snapToPrevKeyframe(),
-                                      onSnapNext: () => controller.snapToNextKeyframe(),
-                                      onUpdateKeyframe: (nodeId, prop, idx, kf) => controller.updateKeyframe(nodeId, prop, idx, kf),
-                                      onAddMotionPreset: (preset) => controller.addQuickMotionPreset(preset),
-                                      onClose: () => controller.toggleTimelinePanel(),
+                    // --- MAIN EDITOR WORKSPACE ---
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          Row(
+                            children: [
+                              // Left Layers Panel (Tablets & Desktop with smooth collapsible animation)
+                              if (isDesktop)
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 220),
+                                  curve: Curves.easeInOutCubic,
+                                  width: _leftSidebarOpen ? 260 : 0,
+                                  child: ClipRect(
+                                    child: OverflowBox(
+                                      minWidth: 260,
+                                      maxWidth: 260,
+                                      alignment: Alignment.topLeft,
+                                      child: LayersPanel(project: widget.project, width: 260),
                                     ),
-                                ],
+                                  ),
+                                ),
+
+                              // Center Canvas (Never squished on mobile!)
+                              Expanded(
+                                child: Stack(
+                                  children: [
+                                    Column(
+                                      children: [
+                                        Expanded(
+                                          child: CanvasViewport(project: widget.project),
+                                        ),
+                                        if (state.showTimelinePanel)
+                                          TimelinePanel(
+                                            timeline: state.timeline,
+                                            currentTimeMs: state.currentTimelineMs,
+                                            isPlaying: state.isPlayingTimeline,
+                                            selectedNodeId: state.primarySelectedId,
+                                            onTogglePlay: () => controller.togglePlayAnimation(),
+                                            onScrub: (ms) => controller.setTimelineScrub(ms),
+                                            onAddKeyframe: (prop) => controller.addKeyframeForSelectedNode(property: prop),
+                                            onDeleteKeyframe: () => controller.deleteKeyframeAtPlayhead(),
+                                            onToggleLoop: () => controller.toggleTimelineLoop(),
+                                            onFpsChanged: (fps) => controller.setTimelineFps(fps),
+                                            onSnapPrev: () => controller.snapToPrevKeyframe(),
+                                            onSnapNext: () => controller.snapToNextKeyframe(),
+                                            onUpdateKeyframe: (nodeId, prop, idx, kf) => controller.updateKeyframe(nodeId, prop, idx, kf),
+                                            onAddMotionPreset: (preset) => controller.addQuickMotionPreset(preset),
+                                            onClose: () => controller.toggleTimelinePanel(),
+                                          ),
+                                      ],
+                                    ),
+
+                                    // PC Desktop: Floating Bottom Canvas Toolbar
+                                    if (isDesktop)
+                                      Positioned(
+                                        bottom: 22,
+                                        left: 0,
+                                        right: 0,
+                                        child: Center(
+                                          child: _buildDesktopFloatingToolbar(
+                                            context,
+                                            state,
+                                            controller,
+                                            tokens,
+                                            isDark,
+                                            isGlass,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+
+                              // Right Inspector / Properties Panel (Tablets & Desktop with smooth collapsible animation)
+                              if (isDesktop)
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 220),
+                                  curve: Curves.easeInOutCubic,
+                                  width: _rightSidebarOpen
+                                      ? (state.isDevInspectMode ? 340 : 280)
+                                      : 0,
+                                  child: ClipRect(
+                                    child: OverflowBox(
+                                      minWidth: state.isDevInspectMode ? 340 : 280,
+                                      maxWidth: state.isDevInspectMode ? 340 : 280,
+                                      alignment: Alignment.topRight,
+                                      child: state.isDevInspectMode
+                                          ? InspectorPanel(project: widget.project)
+                                          : PropertiesPanel(project: widget.project, width: 280),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+
+                          // --- MOBILE FLOATING CONTEXTUAL SELECTION BAR ---
+                          if (!isDesktop)
+                            _buildMobileSelectionActionBar(
+                              context,
+                              state,
+                              controller,
+                              tokens,
+                              isDark,
+                            ),
+
+                          // --- MOBILE FLOATING BOTTOM DOCK (Min 44x44 tap targets) ---
+                          if (!isDesktop)
+                            _buildMobileBottomDock(
+                              context,
+                              state,
+                              controller,
+                              tokens,
+                              isDark,
+                              isGlass,
+                            ),
+
+                          // --- MOBILE SLIDING DRAWER / BOTTOM SHEET FOR LAYERS (Does not squish canvas!) ---
+                          if (!isDesktop && _showLayersSheet)
+                            _buildMobileSlidingSheet(
+                              context: context,
+                              constraints: constraints,
+                              title: 'Layers',
+                              tokens: tokens,
+                              isDark: isDark,
+                              onClose: () => setState(() => _showLayersSheet = false),
+                              child: LayersPanel(
+                                project: widget.project,
+                                width: double.infinity,
                               ),
                             ),
 
-                            // Right Inspector Panel or Properties Panel (Tablets & Desktop)
-                            if (layoutType == DeviceLayoutType.tabletOrDesktop)
-                              state.isDevInspectMode
-                                  ? InspectorPanel(project: widget.project)
-                                  : PropertiesPanel(project: widget.project),
-                          ],
-                        ),
-
-                        // --- MOBILE FLOATING CONTEXTUAL SELECTION BAR ---
-                        if (layoutType != DeviceLayoutType.tabletOrDesktop)
-                          _buildMobileSelectionActionBar(
-                            context,
-                            state,
-                            controller,
-                            isDark,
-                            isGlass,
-                          ),
-
-                        // --- MOBILE FLOATING BOTTOM DOCK ---
-                        if (layoutType != DeviceLayoutType.tabletOrDesktop)
-                          _buildMobileBottomDock(
-                            context,
-                            state,
-                            controller,
-                            isDark,
-                            isGlass,
-                          ),
-
-                        // --- MOBILE SLIDING LAYERS SHEET / DRAWER ---
-                        if (_showLayersSheet &&
-                            layoutType != DeviceLayoutType.tabletOrDesktop)
-                          _buildMobileSheet(
-                            context: context,
-                            constraints: constraints,
-                            title: 'Layers',
-                            onClose: () =>
-                                setState(() => _showLayersSheet = false),
-                            child: LayersPanel(
-                              project: widget.project,
-                              width: double.infinity,
+                          // --- MOBILE SLIDING DRAWER / BOTTOM SHEET FOR PROPERTIES (Does not squish canvas!) ---
+                          if (!isDesktop && _showPropertiesSheet)
+                            _buildMobileSlidingSheet(
+                              context: context,
+                              constraints: constraints,
+                              title: 'Properties',
+                              tokens: tokens,
+                              isDark: isDark,
+                              onClose: () => setState(() => _showPropertiesSheet = false),
+                              child: PropertiesPanel(
+                                project: widget.project,
+                                width: double.infinity,
+                              ),
                             ),
-                            isDark: isDark,
-                          ),
-
-                        // --- MOBILE SLIDING PROPERTIES SHEET / DRAWER ---
-                        if (_showPropertiesSheet &&
-                            layoutType != DeviceLayoutType.tabletOrDesktop)
-                          _buildMobileSheet(
-                            context: context,
-                            constraints: constraints,
-                            title: 'Properties',
-                            onClose: () =>
-                                setState(() => _showPropertiesSheet = false),
-                            child: PropertiesPanel(
-                              project: widget.project,
-                              width: double.infinity,
-                            ),
-                            isDark: isDark,
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
 
     return FormaAmbientBackdrop(explicitTokens: tokens, child: content);
   }
@@ -609,12 +698,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
     dynamic state,
     EditorController controller,
     DeviceLayoutType layoutType,
+    FormaThemeTokens tokens,
     bool isDark,
     bool isGlass,
   ) {
     final settings = ref.watch(settingsProvider);
-    final isSystemDark = Theme.of(context).brightness == Brightness.dark;
-    final tokens = FormaTheme.tokensForMode(settings.themeMode, isSystemDark: isSystemDark);
+    final isDesktop = layoutType == DeviceLayoutType.tabletOrDesktop;
+    final activePage = state.project.getPage(state.activePageId);
 
     Widget barContent = Container(
       height: 52,
@@ -631,9 +721,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            // Back to Home
+            // Left Cluster: Home + Breadcrumbs
             NeuIconButton(
               icon: Icons.home_rounded,
               size: 34,
@@ -644,222 +733,255 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
             const SizedBox(width: 8),
 
             // App Logo
-            const FormaLogo(size: 26),
-            const SizedBox(width: 8),
+            const FormaLogo(size: 24),
+            const SizedBox(width: 10),
 
-            // Project Title (Tap to Rename)
-            InkWell(
-              onTap: () => _showRenameDialog(controller, state.project.name),
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 160),
-                      child: Text(
-                        state.project.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: isDark
-                              ? FormaColors.darkTextMain
-                              : FormaColors.lightTextMain,
+            // Breadcrumbs Header
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Home breadcrumb
+                Text(
+                  'Forma',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textMuted,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(Icons.chevron_right_rounded, size: 14, color: tokens.textMuted),
+                ),
+
+                // Project Name (Tap to Rename)
+                InkWell(
+                  onTap: () => _showRenameDialog(controller, state.project.name),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: isDesktop ? 220 : 130),
+                          child: Text(
+                            state.project.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: tokens.textMain,
+                            ),
+                          ),
                         ),
+                        const SizedBox(width: 4),
+                        Icon(Icons.edit_outlined, size: 12, color: tokens.textMuted),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Active Page / Canvas Breadcrumb Pill
+                if (activePage != null) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Icon(Icons.chevron_right_rounded, size: 14, color: tokens.textMuted),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: tokens.accent.withValues(alpha: isDark ? 0.20 : 0.10),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: tokens.accent.withValues(alpha: isDark ? 0.40 : 0.25),
+                        width: 1.0,
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.edit_outlined,
-                      size: 13,
-                      color: isDark ? Colors.white54 : Colors.black45,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-
-            // Undo / Redo
-            NeuIconButton(
-              icon: Icons.undo_rounded,
-              size: 32,
-              iconSize: 16,
-              tooltip: 'Undo (Ctrl+Z)',
-              onPressed: controller.canUndo ? controller.undo : null,
-            ),
-            const SizedBox(width: 4),
-            NeuIconButton(
-              icon: Icons.redo_rounded,
-              size: 32,
-              iconSize: 16,
-              tooltip: 'Redo (Ctrl+Y)',
-              onPressed: controller.canRedo ? controller.redo : null,
-            ),
-            const SizedBox(width: 12),
-
-            // Central Tools Dock on Tablets & Desktop
-            if (layoutType == DeviceLayoutType.tabletOrDesktop) ...[
-              _buildToolsBar(state, controller, isDark),
-              const SizedBox(width: 12),
-            ],
-
-            // Insert Image
-            NeuIconButton(
-              icon: Icons.image_outlined,
-              size: 34,
-              iconSize: 16,
-              tooltip: 'Insert Image (PNG/JPG)',
-              onPressed: () => _handleInsertImage(controller),
-            ),
-            const SizedBox(width: 6),
-
-            // Icon Studio (Limited Grid Arena)
-            NeuIconButton(
-              icon: Icons.star_border_purple500_rounded,
-              size: 34,
-              iconSize: 16,
-              iconColor: const Color(0xFF8B5CF6),
-              tooltip: 'Open Icon Studio Arena',
-              onPressed: () => IconEditorDialog.show(
-                context,
-                controller: controller,
-                isDark: isDark,
-              ),
-            ),
-            const SizedBox(width: 6),
-
-            // Import SVG
-            NeuIconButton(
-              icon: Icons.file_open_outlined,
-              size: 34,
-              iconSize: 16,
-              tooltip: 'Import SVG to Canvas',
-              onPressed: () => _handleImportSvg(controller),
-            ),
-            const SizedBox(width: 6),
-
-            // Command Palette Button
-            NeuIconButton(
-              icon: Icons.terminal_rounded,
-              size: 34,
-              iconSize: 16,
-              tooltip: 'Command Palette (Ctrl+K)',
-              onPressed: () => _openCommandPalette(context, controller, state),
-            ),
-            const SizedBox(width: 6),
-
-            // Zoom percentage indicator (clickable to manually edit exact zoom %)
-            NeuButton(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              onPressed: () => showManualZoomDialog(
-                context,
-                controller,
-                state.zoom,
-                settings.extendedZoomLimit,
-              ),
-              tooltip: 'Set Zoom Level (${(state.zoom * 100).toInt()}%)',
-              child: Text(
-                '${(state.zoom * 100).toInt()}%',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: isDark
-                      ? FormaColors.darkTextMain
-                      : FormaColors.lightTextMain,
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-
-            // Dev Inspect Toggle
-            NeuIconButton(
-              icon: Icons.code_rounded,
-              size: 34,
-              iconSize: 16,
-              isActive: state.isDevInspectMode,
-              tooltip: 'Inspect CSS / Flutter Code',
-              onPressed: controller.toggleDevInspectMode,
-            ),
-            const SizedBox(width: 6),
-
-            // Play Prototype
-            NeuIconButton(
-              icon: Icons.play_arrow_rounded,
-              size: 34,
-              iconSize: 18,
-              tooltip: 'Play Interactive Prototype',
-              iconColor: FormaColors.successGreen,
-              onPressed: controller.togglePrototypePlay,
-            ),
-            const SizedBox(width: 6),
-
-            // Settings Button
-            NeuIconButton(
-              icon: Icons.settings_outlined,
-              size: 34,
-              iconSize: 16,
-              tooltip: 'Settings & Themes',
-              onPressed: () => _openSettings(context),
-            ),
-            const SizedBox(width: 6),
-
-            // Theme Toggle Button (Instant Light / Dark toggle)
-            NeuIconButton(
-              icon: isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-              size: 34,
-              iconSize: 16,
-              iconColor: isDark ? const Color(0xFFFBBF24) : const Color(0xFF6366F1),
-              tooltip: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
-              onPressed: () {
-                final current = ref.read(settingsProvider);
-                final isCurrentlyDark = current.themeMode == FormaThemeMode.dark ||
-                    (current.themeMode == FormaThemeMode.system &&
-                        MediaQuery.platformBrightnessOf(context) == Brightness.dark);
-                final nextMode = isCurrentlyDark ? FormaThemeMode.light : FormaThemeMode.dark;
-                ref.read(settingsProvider.notifier).setThemeMode(nextMode);
-              },
-            ),
-            const SizedBox(width: 6),
-
-            // Studio Themes Switcher Button (Direct access to all 4 themes including Liquid Glass & Cosmic)
-            NeuIconButton(
-              icon: Icons.palette_outlined,
-              size: 34,
-              iconSize: 16,
-              iconColor: tokens.accent,
-              tooltip: 'Studio Themes (Light, Dark, Liquid, Cosmic)',
-              onPressed: () => FormaThemePickerDialog.show(context),
-            ),
-            const SizedBox(width: 6),
-
-            // Export Button (Sleek, Restrained Neumorphic Pill)
-            NeuButton(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-              onPressed: () => _openExportDialog(context, state),
-              tooltip: 'Export Design (PNG, SVG, PDF, FIG)',
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.file_download_outlined,
-                    size: 15,
-                    color: FormaColors.primaryBlue,
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    'Export',
-                    style: TextStyle(
-                      color: tokens.textMain,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                    child: Text(
+                      activePage.name,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: tokens.accent,
+                      ),
                     ),
                   ),
                 ],
-              ),
+
+                if (isDesktop) ...[
+                  const SizedBox(width: 12),
+                  // Collapsible Left Sidebar (Layers) Toggle
+                  NeuIconButton(
+                    icon: Icons.view_sidebar_rounded,
+                    size: 32,
+                    iconSize: 16,
+                    isActive: _leftSidebarOpen,
+                    tooltip: _leftSidebarOpen ? 'Collapse Layers (Ctrl+[)' : 'Expand Layers (Ctrl+[)',
+                    onPressed: () => setState(() => _leftSidebarOpen = !_leftSidebarOpen),
+                  ),
+                  const SizedBox(width: 6),
+
+                  // Undo / Redo
+                  NeuIconButton(
+                    icon: Icons.undo_rounded,
+                    size: 32,
+                    iconSize: 15,
+                    tooltip: 'Undo (Ctrl+Z)',
+                    onPressed: controller.canUndo ? controller.undo : null,
+                  ),
+                  const SizedBox(width: 4),
+                  NeuIconButton(
+                    icon: Icons.redo_rounded,
+                    size: 32,
+                    iconSize: 15,
+                    tooltip: 'Redo (Ctrl+Y)',
+                    onPressed: controller.canRedo ? controller.redo : null,
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(width: 14),
+
+            // Right Cluster: Actions & Export
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Zoom Percentage Pill
+                NeuButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  onPressed: () => showManualZoomDialog(
+                    context,
+                    controller,
+                    state.zoom,
+                    settings.extendedZoomLimit,
+                  ),
+                  tooltip: 'Set Zoom Level (${(state.zoom * 100).toInt()}%)',
+                  child: Text(
+                    '${(state.zoom * 100).toInt()}%',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: tokens.textMain,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+
+                if (isDesktop) ...[
+                  // Dev Inspect Code Toggle
+                  NeuIconButton(
+                    icon: Icons.code_rounded,
+                    size: 34,
+                    iconSize: 16,
+                    isActive: state.isDevInspectMode,
+                    tooltip: 'Inspect Code (CSS / Flutter)',
+                    onPressed: controller.toggleDevInspectMode,
+                  ),
+                  const SizedBox(width: 6),
+
+                  // Animation Timeline Toggle
+                  NeuIconButton(
+                    icon: Icons.animation_rounded,
+                    size: 34,
+                    iconSize: 16,
+                    isActive: state.showTimelinePanel,
+                    tooltip: 'Toggle Animation Timeline',
+                    onPressed: controller.toggleTimelinePanel,
+                  ),
+                  const SizedBox(width: 6),
+                ],
+
+                // Play Prototype Button
+                NeuIconButton(
+                  icon: Icons.play_arrow_rounded,
+                  size: 34,
+                  iconSize: 18,
+                  tooltip: 'Play Interactive Prototype',
+                  iconColor: FormaColors.successGreen,
+                  onPressed: controller.togglePrototypePlay,
+                ),
+                const SizedBox(width: 6),
+
+                // Theme Toggle Button (Instant Light / Dark toggle)
+                NeuIconButton(
+                  icon: isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  size: 34,
+                  iconSize: 16,
+                  iconColor: isDark ? const Color(0xFFFBBF24) : const Color(0xFF6366F1),
+                  tooltip: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+                  onPressed: () {
+                    final current = ref.read(settingsProvider);
+                    final isCurrentlyDark = current.themeMode == FormaThemeMode.dark ||
+                        (current.themeMode == FormaThemeMode.system &&
+                            MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+                    final nextMode = isCurrentlyDark ? FormaThemeMode.light : FormaThemeMode.dark;
+                    ref.read(settingsProvider.notifier).setThemeMode(nextMode);
+                  },
+                ),
+                const SizedBox(width: 6),
+
+                // Studio Themes Switcher Button
+                NeuIconButton(
+                  icon: Icons.palette_outlined,
+                  size: 34,
+                  iconSize: 16,
+                  iconColor: tokens.accent,
+                  tooltip: 'Studio Themes (Light, Dark, Glass, Cosmic)',
+                  onPressed: () => FormaThemePickerDialog.show(context),
+                ),
+                const SizedBox(width: 6),
+
+                if (isDesktop) ...[
+                  // Settings Button
+                  NeuIconButton(
+                    icon: Icons.settings_outlined,
+                    size: 34,
+                    iconSize: 16,
+                    tooltip: 'Settings',
+                    onPressed: () => _openSettings(context),
+                  ),
+                  const SizedBox(width: 6),
+
+                  // Collapsible Right Sidebar (Properties) Toggle
+                  NeuIconButton(
+                    icon: Icons.view_sidebar_outlined,
+                    size: 34,
+                    iconSize: 16,
+                    isActive: _rightSidebarOpen,
+                    tooltip: _rightSidebarOpen ? 'Collapse Properties (Ctrl+])' : 'Expand Properties (Ctrl+])',
+                    onPressed: () => setState(() => _rightSidebarOpen = !_rightSidebarOpen),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+
+                // Export Button
+                NeuButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  onPressed: () => _openExportDialog(context, state),
+                  tooltip: 'Export Design (PNG, SVG, PDF, FIG)',
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.file_download_outlined,
+                        size: 15,
+                        color: tokens.accent,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Export',
+                        style: TextStyle(
+                          color: tokens.textMain,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -882,6 +1004,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
     BuildContext context,
     dynamic state,
     EditorController controller,
+    FormaThemeTokens tokens,
     bool isDark,
     bool isGlass,
   ) {
@@ -890,18 +1013,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: isGlass
-            ? (isDark ? const Color(0x15FFFFFF) : const Color(0x40FFFFFF))
-            : (isDark ? const Color(0xFF131822) : const Color(0xFFE2E8F0)),
+        color: tokens.wellBg,
         border: Border(
           bottom: BorderSide(
-            color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
+            color: tokens.borderSubtle,
+            width: 1.0,
           ),
         ),
       ),
       child: Row(
         children: [
-          const Icon(Icons.tab_rounded, size: 14, color: FormaColors.primaryBlue),
+          Icon(Icons.tab_rounded, size: 14, color: tokens.accent),
           const SizedBox(width: 6),
           Expanded(
             child: ListView(
@@ -916,11 +1038,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                       decoration: BoxDecoration(
                         color: page.id == state.activePageId
-                            ? (isDark ? FormaColors.primaryBlue.withValues(alpha: 0.3) : Colors.white)
+                            ? tokens.accent.withValues(alpha: isDark ? 0.25 : 0.12)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(6),
                         border: page.id == state.activePageId
-                            ? Border.all(color: FormaColors.primaryBlue, width: 1.0)
+                            ? Border.all(color: tokens.accent, width: 1.0)
                             : null,
                       ),
                       child: Row(
@@ -931,14 +1053,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: page.id == state.activePageId ? FontWeight.bold : FontWeight.w500,
-                              color: isDark ? Colors.white : FormaColors.lightTextMain,
+                              color: page.id == state.activePageId ? tokens.accent : tokens.textMuted,
                             ),
                           ),
                           if (pages.length > 1 && page.id == state.activePageId) ...[
                             const SizedBox(width: 4),
                             GestureDetector(
                               onTap: () => controller.deletePage(page.id),
-                              child: const Icon(Icons.close_rounded, size: 12, color: Colors.grey),
+                              child: Icon(Icons.close_rounded, size: 12, color: tokens.textMuted),
                             ),
                           ],
                         ],
@@ -950,8 +1072,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.add_rounded, size: 16),
-            tooltip: 'Add Canvas / Page Tab',
+            icon: Icon(Icons.add_rounded, size: 16, color: tokens.textMuted),
+            tooltip: 'Add Canvas Page Tab',
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
             onPressed: () {
@@ -963,166 +1085,181 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
     );
   }
 
-  Widget _buildToolsBar(
+  /// PC Desktop: Floating Bottom Canvas Toolbar with refined cards and micro-interactions
+  Widget _buildDesktopFloatingToolbar(
+    BuildContext context,
     dynamic state,
     EditorController controller,
+    FormaThemeTokens tokens,
     bool isDark,
+    bool isGlass,
   ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      decoration: BoxDecoration(
-        color: isDark ? FormaColors.darkBg : FormaColors.lightBg,
-        borderRadius: BorderRadius.circular(14),
+    final settings = ref.watch(settingsProvider);
+
+    final tools = <Widget>[
+      _desktopToolButton(EditorTool.select, Icons.near_me_rounded, 'Select (V)', state, controller, tokens),
+      _desktopToolButton(EditorTool.hand, Icons.pan_tool_rounded, 'Hand Pan (H)', state, controller, tokens),
+      _desktopVerticalDivider(tokens),
+      _desktopToolButton(EditorTool.frame, Icons.crop_free_rounded, 'Frame / Artboard (F)', state, controller, tokens),
+      _desktopToolButton(EditorTool.rectangle, Icons.crop_square_rounded, 'Rectangle (R)', state, controller, tokens),
+      _desktopToolButton(EditorTool.roundedRectangle, Icons.rectangle_rounded, 'Rounded Rect', state, controller, tokens),
+      _desktopToolButton(EditorTool.ellipse, Icons.circle_outlined, 'Ellipse / Circle (O)', state, controller, tokens),
+      _desktopToolButton(EditorTool.triangle, Icons.change_history_rounded, 'Triangle', state, controller, tokens),
+      _desktopToolButton(EditorTool.polygon, Icons.hexagon_outlined, 'Polygon (5-sided)', state, controller, tokens),
+      _desktopToolButton(EditorTool.star, Icons.star_border_rounded, 'Star', state, controller, tokens),
+      _desktopToolButton(EditorTool.line, Icons.horizontal_rule_rounded, 'Line (L)', state, controller, tokens),
+      _desktopToolButton(EditorTool.arrow, Icons.arrow_right_alt_rounded, 'Arrow', state, controller, tokens),
+      _desktopToolButton(EditorTool.vectorPen, Icons.polyline_rounded, 'Vector Pen (P)', state, controller, tokens),
+      _desktopToolButton(EditorTool.text, Icons.title_rounded, 'Text (T)', state, controller, tokens),
+      _desktopToolButton(EditorTool.freehand, Icons.edit_outlined, 'Pencil Draw', state, controller, tokens),
+      _desktopVerticalDivider(tokens),
+      NeuIconButton(
+        icon: Icons.image_outlined,
+        size: 34,
+        iconSize: 16,
+        tooltip: 'Insert Image (PNG/JPG)',
+        onPressed: () => _handleInsertImage(controller),
       ),
+      const SizedBox(width: 4),
+      NeuIconButton(
+        icon: Icons.star_border_purple500_rounded,
+        size: 34,
+        iconSize: 16,
+        iconColor: const Color(0xFF8B5CF6),
+        tooltip: 'Open Icon Studio Arena',
+        onPressed: () => IconEditorDialog.show(
+          context,
+          controller: controller,
+          isDark: isDark,
+        ),
+      ),
+      const SizedBox(width: 4),
+      NeuIconButton(
+        icon: Icons.file_open_outlined,
+        size: 34,
+        iconSize: 16,
+        tooltip: 'Import SVG',
+        onPressed: () => _handleImportSvg(controller),
+      ),
+      const SizedBox(width: 4),
+      NeuIconButton(
+        icon: Icons.terminal_rounded,
+        size: 34,
+        iconSize: 16,
+        tooltip: 'Command Palette (Ctrl+K)',
+        onPressed: () => _openCommandPalette(context, controller, state),
+      ),
+    ];
+
+    final row = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          _toolButton(
-            EditorTool.select,
-            Icons.near_me_rounded,
-            'Select (V)',
-            state,
-            controller,
-          ),
-          _toolButton(
-            EditorTool.hand,
-            Icons.pan_tool_rounded,
-            'Hand Pan (H)',
-            state,
-            controller,
-          ),
-          const SizedBox(width: 4),
-          _toolButton(
-            EditorTool.frame,
-            Icons.crop_free_rounded,
-            'Frame (F)',
-            state,
-            controller,
-          ),
-          _toolButton(
-            EditorTool.rectangle,
-            Icons.crop_square_rounded,
-            'Rectangle (R)',
-            state,
-            controller,
-          ),
-          _toolButton(
-            EditorTool.roundedRectangle,
-            Icons.rectangle_rounded,
-            'Rounded Rect',
-            state,
-            controller,
-          ),
-          _toolButton(
-            EditorTool.triangle,
-            Icons.change_history_rounded,
-            'Triangle',
-            state,
-            controller,
-          ),
-          _toolButton(
-            EditorTool.ellipse,
-            Icons.circle_outlined,
-            'Ellipse (O)',
-            state,
-            controller,
-          ),
-          _toolButton(
-            EditorTool.line,
-            Icons.horizontal_rule_rounded,
-            'Line (L)',
-            state,
-            controller,
-          ),
-          _toolButton(
-            EditorTool.arrow,
-            Icons.arrow_right_alt_rounded,
-            'Arrow',
-            state,
-            controller,
-          ),
-          _toolButton(
-            EditorTool.polygon,
-            Icons.hexagon_outlined,
-            'Polygon (5-sided)',
-            state,
-            controller,
-          ),
-          _toolButton(
-            EditorTool.star,
-            Icons.star_border_rounded,
-            'Star',
-            state,
-            controller,
-          ),
-          _toolButton(
-            EditorTool.vectorPen,
-            Icons.polyline_rounded,
-            'Vector Pen (P)',
-            state,
-            controller,
-          ),
-          _toolButton(
-            EditorTool.text,
-            Icons.title_rounded,
-            'Text (T)',
-            state,
-            controller,
-          ),
-          _toolButton(
-            EditorTool.freehand,
-            Icons.edit_outlined,
-            'Pencil Draw',
-            state,
-            controller,
+        children: tools,
+      ),
+    );
+
+    if (isGlass) {
+      return LiquidGlassBox(
+        radius: 24,
+        blur: settings.glassBlur,
+        opacity: settings.glassOpacity,
+        hasSpecular: settings.glassSpecular,
+        hasSheen: settings.glassSheen,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: row,
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: tokens.borderSubtle, width: 1.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
+      child: row,
     );
   }
 
-  Widget _toolButton(
+  Widget _desktopToolButton(
     EditorTool tool,
     IconData icon,
     String tooltip,
     dynamic state,
-    EditorController controller, {
-    double size = 36,
-    double iconSize = 18,
-  }) {
+    EditorController controller,
+    FormaThemeTokens tokens,
+  ) {
     final isActive = state.activeTool == tool;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: NeuIconButton(
-        icon: icon,
-        size: size,
-        iconSize: iconSize,
-        isActive: isActive,
-        tooltip: tooltip,
-        onPressed: () {
-          if (tool == EditorTool.text && isActive) {
-            final id = controller.insertTextAtViewportCenter();
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              final n = controller.currentState.project.nodes[id];
-              if (n != null && mounted) {
-                CanvasViewport.showInPlaceTextEditor(context, n, controller);
-              }
-            });
-            controller.setTool(EditorTool.select);
-            return;
-          }
-          controller.setTool(tool);
-        },
+      child: Tooltip(
+        message: tooltip,
+        waitDuration: const Duration(milliseconds: 300),
+        child: InkWell(
+          onTap: () {
+            if (tool == EditorTool.text && isActive) {
+              final id = controller.insertTextAtViewportCenter();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final n = controller.currentState.project.nodes[id];
+                if (n != null && mounted) {
+                  CanvasViewport.showInPlaceTextEditor(context, n, controller);
+                }
+              });
+              controller.setTool(EditorTool.select);
+              return;
+            }
+            controller.setTool(tool);
+          },
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: isActive
+                  ? tokens.accent.withValues(alpha: tokens.isDark ? 0.25 : 0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              border: isActive
+                  ? Border.all(color: tokens.accent, width: 1.0)
+                  : null,
+            ),
+            child: Center(
+              child: Icon(
+                icon,
+                size: 16,
+                color: isActive ? tokens.accent : tokens.textMuted,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
 
+  Widget _desktopVerticalDivider(FormaThemeTokens tokens) {
+    return Container(
+      width: 1,
+      height: 22,
+      margin: const EdgeInsets.symmetric(horizontal: 6),
+      color: tokens.borderSubtle,
+    );
+  }
+
+  /// Mobile: Contextual Selection Action Bar with min 44x44 thumb-friendly touch targets
   Widget _buildMobileSelectionActionBar(
     BuildContext context,
     dynamic state,
     EditorController controller,
+    FormaThemeTokens tokens,
     bool isDark,
-    bool isGlass,
   ) {
     final selectedIds = state.selectedNodeIds as Set<String>;
     if (selectedIds.isEmpty) return const SizedBox.shrink();
@@ -1130,228 +1267,228 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
     final primaryNode = state.project.nodes[selectedIds.first];
     final fillColor = (primaryNode != null && primaryNode.fills.isNotEmpty)
         ? primaryNode.fills.first.color
-        : FormaColors.primaryBlue;
-
-    final barContent = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E2430) : Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.22),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // PROMINENT DELETE BUTTON (Red accent)
-          IconButton(
-            icon: const Icon(
-              Icons.delete_rounded,
-              color: Color(0xFFEF4444),
-              size: 22,
-            ),
-            tooltip: 'Delete Selected',
-            splashRadius: 22,
-            onPressed: controller.deleteSelectedNodes,
-          ),
-          const SizedBox(width: 4),
-
-          // DUPLICATE BUTTON
-          IconButton(
-            icon: Icon(
-              Icons.copy_rounded,
-              color: isDark ? Colors.white70 : FormaColors.lightTextMain,
-              size: 20,
-            ),
-            tooltip: 'Duplicate (Ctrl+D)',
-            splashRadius: 20,
-            onPressed: controller.duplicateSelectedNodes,
-          ),
-          const SizedBox(width: 4),
-
-          // COLOR SWATCH BUTTON
-          GestureDetector(
-            onTap: () {
-              ColorPickerDialog.show(
-                context,
-                initialColor: fillColor,
-                initialFill: (primaryNode != null && primaryNode.fills.isNotEmpty)
-                    ? primaryNode.fills.first
-                    : null,
-                onColorChanged: (c) {
-                  controller.updateSelectedProperties(
-                    fills: [DesignFill.solid(c)],
-                  );
-                },
-                onFillChanged: (newFill) {
-                  controller.updateSelectedProperties(fills: [newFill]);
-                },
-              );
-            },
-            child: Container(
-              width: 26,
-              height: 26,
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              decoration: BoxDecoration(
-                color: fillColor,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: fillColor.withValues(alpha: 0.5),
-                    blurRadius: 6,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-
-          // IMAGE FILL BUTTON (Mask image inside selected object)
-          IconButton(
-            icon: const Icon(
-              Icons.image_outlined,
-              size: 20,
-            ),
-            tooltip: 'Apply Image Inside Shape',
-            splashRadius: 20,
-            onPressed: () => _handleSetSelectedImageFill(controller),
-          ),
-          const SizedBox(width: 4),
-
-          // ALIGN CENTER
-          IconButton(
-            icon: Icon(
-              Icons.align_horizontal_center_rounded,
-              color: isDark ? Colors.white70 : FormaColors.lightTextMain,
-              size: 20,
-            ),
-            tooltip: 'Align Center',
-            splashRadius: 20,
-            onPressed: () => controller.alignSelection('centerHorizontal'),
-          ),
-          const SizedBox(width: 4),
-
-          // BRING FORWARD
-          IconButton(
-            icon: Icon(
-              Icons.flip_to_front_rounded,
-              color: isDark ? Colors.white70 : FormaColors.lightTextMain,
-              size: 20,
-            ),
-            tooltip: 'Bring Forward',
-            splashRadius: 20,
-            onPressed: controller.bringForward,
-          ),
-          const SizedBox(width: 4),
-
-          // PROPERTIES TOGGLE
-          IconButton(
-            icon: const Icon(
-              Icons.tune_rounded,
-              color: FormaColors.primaryBlue,
-              size: 20,
-            ),
-            tooltip: 'Properties Sheet',
-            splashRadius: 20,
-            onPressed: () {
-              setState(() {
-                _showPropertiesSheet = !_showPropertiesSheet;
-                _showLayersSheet = false;
-              });
-            },
-          ),
-        ],
-      ),
-    );
+        : tokens.accent;
 
     return Positioned(
-      top: 12,
-      left: 16,
-      right: 16,
+      top: 10,
+      left: 12,
+      right: 12,
       child: Center(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: barContent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          decoration: BoxDecoration(
+            color: tokens.surface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: tokens.borderSubtle, width: 1.0),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Prominent Delete Button (min 44x44 tap target)
+                _buildMobileActionButton(
+                  icon: Icons.delete_outline_rounded,
+                  iconColor: const Color(0xFFEF4444),
+                  tooltip: 'Delete Selected',
+                  onPressed: controller.deleteSelectedNodes,
+                ),
+
+                // Duplicate Button (min 44x44 tap target)
+                _buildMobileActionButton(
+                  icon: Icons.copy_rounded,
+                  iconColor: tokens.textMain,
+                  tooltip: 'Duplicate (Ctrl+D)',
+                  onPressed: controller.duplicateSelectedNodes,
+                ),
+
+                // Color Swatch Button (min 44x44 tap target)
+                InkWell(
+                  onTap: () {
+                    ColorPickerDialog.show(
+                      context,
+                      initialColor: fillColor,
+                      initialFill: (primaryNode != null && primaryNode.fills.isNotEmpty)
+                          ? primaryNode.fills.first
+                          : null,
+                      onColorChanged: (c) {
+                        controller.updateSelectedProperties(
+                          fills: [DesignFill.solid(c)],
+                        );
+                      },
+                      onFillChanged: (newFill) {
+                        controller.updateSelectedProperties(fills: [newFill]);
+                      },
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(22),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    child: Container(
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        color: fillColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: fillColor.withValues(alpha: 0.4),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Image Mask Fill Button (min 44x44 tap target)
+                _buildMobileActionButton(
+                  icon: Icons.image_outlined,
+                  iconColor: tokens.textMain,
+                  tooltip: 'Apply Image Fill',
+                  onPressed: () => _handleSetSelectedImageFill(controller),
+                ),
+
+                // Align Center Button (min 44x44 tap target)
+                _buildMobileActionButton(
+                  icon: Icons.align_horizontal_center_rounded,
+                  iconColor: tokens.textMain,
+                  tooltip: 'Align Center',
+                  onPressed: () => controller.alignSelection('centerHorizontal'),
+                ),
+
+                // Bring Forward Button (min 44x44 tap target)
+                _buildMobileActionButton(
+                  icon: Icons.flip_to_front_rounded,
+                  iconColor: tokens.textMain,
+                  tooltip: 'Bring Forward',
+                  onPressed: controller.bringForward,
+                ),
+
+                // Properties Sheet Toggle Button (min 44x44 tap target)
+                _buildMobileActionButton(
+                  icon: Icons.tune_rounded,
+                  iconColor: tokens.accent,
+                  tooltip: 'Open Properties Sheet',
+                  onPressed: () {
+                    setState(() {
+                      _showPropertiesSheet = !_showPropertiesSheet;
+                      _showLayersSheet = false;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
+  Widget _buildMobileActionButton({
+    required IconData icon,
+    required Color iconColor,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          child: Icon(icon, size: 20, color: iconColor),
+        ),
+      ),
+    );
+  }
+
+  /// Mobile: Floating Bottom Dock with generous min 44x44 tap targets
   Widget _buildMobileBottomDock(
     BuildContext context,
     dynamic state,
     EditorController controller,
+    FormaThemeTokens tokens,
     bool isDark,
     bool isGlass,
   ) {
-    final settings = ref.watch(settingsProvider);
+    final pageBg = state.project.getPage(state.activePageId)?.backgroundColor ?? Colors.white;
 
-    final children = [
-      NeuIconButton(
+    final children = <Widget>[
+      // Layers Toggle (min 44x44)
+      _buildDockToolButton(
         icon: Icons.layers_outlined,
-        size: 38,
-        iconSize: 18,
+        tooltip: 'Layers Sheet',
         isActive: _showLayersSheet,
-        tooltip: 'Layers',
-        onPressed: () {
+        tokens: tokens,
+        onTap: () {
           setState(() {
             _showLayersSheet = !_showLayersSheet;
             _showPropertiesSheet = false;
           });
         },
       ),
-      const SizedBox(width: 4, height: 4),
-      _toolButton(
-        EditorTool.select,
-        Icons.near_me_rounded,
-        'Select',
-        state,
-        controller,
-        size: 36,
-        iconSize: 17,
+
+      // Select Tool (min 44x44)
+      _buildDockToolButton(
+        icon: Icons.near_me_rounded,
+        tooltip: 'Select (V)',
+        isActive: state.activeTool == EditorTool.select,
+        tokens: tokens,
+        onTap: () => controller.setTool(EditorTool.select),
       ),
-      NeuIconButton(
+
+      // Shapes Menu (min 44x44)
+      _buildDockToolButton(
         icon: Icons.category_rounded,
-        size: 36,
-        iconSize: 17,
-        tooltip: 'Shapes Menu',
-        onPressed: () => _showMobileShapesMenu(context, controller),
+        tooltip: 'Shape Tools',
+        isActive: false,
+        tokens: tokens,
+        onTap: () => _showMobileShapesMenu(context, controller, tokens),
       ),
-      _toolButton(
-        EditorTool.vectorPen,
-        Icons.polyline_rounded,
-        'Pen',
-        state,
-        controller,
-        size: 36,
-        iconSize: 17,
+
+      // Pen Tool (min 44x44)
+      _buildDockToolButton(
+        icon: Icons.polyline_rounded,
+        tooltip: 'Vector Pen',
+        isActive: state.activeTool == EditorTool.vectorPen,
+        tokens: tokens,
+        onTap: () => controller.setTool(EditorTool.vectorPen),
       ),
-      NeuIconButton(
+
+      // Text Menu (min 44x44)
+      _buildDockToolButton(
         icon: Icons.title_rounded,
-        size: 36,
-        iconSize: 17,
-        isActive: state.activeTool == EditorTool.text,
         tooltip: 'Text & Typography',
-        onPressed: () => _showMobileTextMenu(context, controller),
+        isActive: state.activeTool == EditorTool.text,
+        tokens: tokens,
+        onTap: () => _showMobileTextMenu(context, controller, tokens),
       ),
-      NeuIconButton(
+
+      // Insert Image (min 44x44)
+      _buildDockToolButton(
         icon: Icons.image_outlined,
-        size: 36,
-        iconSize: 17,
         tooltip: 'Insert Image',
-        onPressed: () => _handleInsertImage(controller),
+        isActive: false,
+        tokens: tokens,
+        onTap: () => _handleInsertImage(controller),
       ),
-      GestureDetector(
+
+      // Canvas Background Color Picker (min 44x44 tap target)
+      InkWell(
         onTap: () {
           final page = state.project.getPage(state.activePageId);
           if (page != null) {
@@ -1362,40 +1499,45 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
             );
           }
         },
+        borderRadius: BorderRadius.circular(22),
         child: Container(
-          width: 28,
-          height: 28,
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            color: state.project.getPage(state.activePageId)?.backgroundColor ?? Colors.white,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
-                blurRadius: 4,
-              ),
-            ],
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          child: Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: pageBg,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 4,
+                ),
+              ],
+            ),
           ),
         ),
       ),
-      _toolButton(
-        EditorTool.hand,
-        Icons.pan_tool_rounded,
-        'Pan',
-        state,
-        controller,
-        size: 36,
-        iconSize: 17,
+
+      // Pan Tool (min 44x44)
+      _buildDockToolButton(
+        icon: Icons.pan_tool_rounded,
+        tooltip: 'Pan Canvas (H)',
+        isActive: state.activeTool == EditorTool.hand,
+        tokens: tokens,
+        onTap: () => controller.setTool(EditorTool.hand),
       ),
-      const SizedBox(width: 4, height: 4),
-      NeuIconButton(
+
+      // Properties Toggle (min 44x44)
+      _buildDockToolButton(
         icon: Icons.tune_rounded,
-        size: 38,
-        iconSize: 18,
+        tooltip: 'Properties Sheet',
         isActive: _showPropertiesSheet,
-        tooltip: 'Properties',
-        onPressed: () {
+        tokens: tokens,
+        onTap: () {
           setState(() {
             _showPropertiesSheet = !_showPropertiesSheet;
             _showLayersSheet = false;
@@ -1404,159 +1546,212 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
       ),
     ];
 
-    final dockContent = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: children,
-    );
-
-    final wrappedDock = isGlass
-        ? LiquidGlassBox(
-            radius: 24,
-            blur: settings.glassBlur,
-            opacity: settings.glassOpacity,
-            hasSpecular: settings.glassSpecular,
-            hasSheen: settings.glassSheen,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: dockContent,
-            ),
-          )
-        : NeuCard(
-            radius: 24,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: dockContent,
-            ),
-          );
-
     return Positioned(
-      bottom: 16,
-      left: 16,
-      right: 16,
+      bottom: 14,
+      left: 12,
+      right: 12,
       child: Center(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: wrappedDock,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          decoration: BoxDecoration(
+            color: tokens.surface,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: tokens.borderSubtle, width: 1.0),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.15),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: children,
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildMobileSheet({
+  Widget _buildDockToolButton({
+    required IconData icon,
+    required String tooltip,
+    required bool isActive,
+    required FormaThemeTokens tokens,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isActive
+                ? tokens.accent.withValues(alpha: tokens.isDark ? 0.25 : 0.15)
+                : Colors.transparent,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            size: 20,
+            color: isActive ? tokens.accent : tokens.textMain,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Mobile: Collapsible sliding bottom drawer sheet with drag handle (Never squishes canvas!)
+  Widget _buildMobileSlidingSheet({
     required BuildContext context,
     required BoxConstraints constraints,
     required String title,
+    required FormaThemeTokens tokens,
+    required bool isDark,
     required VoidCallback onClose,
     required Widget child,
-    required bool isDark,
   }) {
-    final isLandscape = constraints.maxHeight < 550;
+    final sheetHeight = math.min(constraints.maxHeight * 0.72, 540.0);
 
-    if (isLandscape) {
-      // Landscape Phone: Slide-over right drawer (full height, 330px width)
-      return Positioned(
-        top: 6,
-        bottom: 6,
-        right: 6,
-        width: math.min(340, constraints.maxWidth * 0.55),
-        child: NeuCard(
-          radius: 18,
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      title.toUpperCase(),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        letterSpacing: 0.6,
-                        color: FormaColors.primaryBlue,
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          // Dimmed backdrop that taps to close
+          GestureDetector(
+            onTap: onClose,
+            child: Container(
+              color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.25),
+            ),
+          ),
+
+          // Sliding Bottom Sheet Container
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: sheetHeight,
+            child: Container(
+              decoration: BoxDecoration(
+                color: tokens.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+                border: Border.all(color: tokens.borderSubtle, width: 1.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 20,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  // Tactile Drag Handle Area
+                  GestureDetector(
+                    onVerticalDragUpdate: (details) {
+                      if (details.primaryDelta != null && details.primaryDelta! > 6) {
+                        onClose();
+                      }
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      color: Colors.transparent,
+                      child: Center(
+                        child: Container(
+                          width: 40,
+                          height: 4.5,
+                          decoration: BoxDecoration(
+                            color: tokens.textMuted.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 18),
-                      splashRadius: 16,
-                      onPressed: onClose,
+                  ),
+
+                  // Header with Title & Close Action
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 2, 8, 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          title.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                            color: tokens.accent,
+                          ),
+                        ),
+                        // Min 44x44 touch target close button
+                        InkWell(
+                          onTap: onClose,
+                          borderRadius: BorderRadius.circular(22),
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            alignment: Alignment.center,
+                            child: Icon(Icons.close_rounded, size: 20, color: tokens.textMuted),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  Divider(height: 1, color: tokens.borderSubtle),
+
+                  // Sheet Content
+                  Expanded(child: child),
+                ],
               ),
-              const Divider(height: 1),
-              Expanded(child: child),
-            ],
+            ),
           ),
-        ),
-      );
-    } else {
-      // Portrait Phone: Slide-up bottom sheet
-      return Positioned(
-        bottom: 74,
-        left: 12,
-        right: 12,
-        height: constraints.maxHeight * 0.70,
-        child: NeuCard(
-          radius: 24,
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      title.toUpperCase(),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        letterSpacing: 0.6,
-                        color: FormaColors.primaryBlue,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 20),
-                      splashRadius: 18,
-                      onPressed: onClose,
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(child: child),
-            ],
-          ),
-        ),
-      );
-    }
+        ],
+      ),
+    );
   }
 
-  void _showMobileShapesMenu(BuildContext context, EditorController controller) {
+  void _showMobileShapesMenu(
+    BuildContext context,
+    EditorController controller,
+    FormaThemeTokens tokens,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Container(
           decoration: BoxDecoration(
-            color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            border: Border.all(
-              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-            ),
+            color: tokens.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+            border: Border.all(color: tokens.borderSubtle),
           ),
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: tokens.borderSubtle,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1564,34 +1759,32 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                     'SHAPE TOOLS',
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w800,
                       letterSpacing: 0.8,
-                      color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                      color: tokens.textMuted,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+                    icon: Icon(Icons.close_rounded, size: 20, color: tokens.textMuted),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               GridView.count(
                 shrinkWrap: true,
                 crossAxisCount: 4,
                 mainAxisSpacing: 10,
                 crossAxisSpacing: 10,
                 children: [
-                  _shapeOption(ctx, controller, EditorTool.rectangle, Icons.crop_square_rounded, 'Rectangle'),
-                  _shapeOption(ctx, controller, EditorTool.roundedRectangle, Icons.rounded_corner_rounded, 'Rounded'),
-                  _shapeOption(ctx, controller, EditorTool.triangle, Icons.change_history_rounded, 'Triangle'),
-                  _shapeOption(ctx, controller, EditorTool.ellipse, Icons.circle_outlined, 'Circle'),
-                  _shapeOption(ctx, controller, EditorTool.polygon, Icons.hexagon_outlined, 'Polygon'),
-                  _shapeOption(ctx, controller, EditorTool.star, Icons.star_border_rounded, 'Star'),
-                  _shapeOption(ctx, controller, EditorTool.line, Icons.horizontal_rule_rounded, 'Line'),
-                  _shapeOption(ctx, controller, EditorTool.frame, Icons.crop_free_rounded, 'Frame'),
+                  _shapeOption(ctx, controller, EditorTool.rectangle, Icons.crop_square_rounded, 'Rectangle', tokens),
+                  _shapeOption(ctx, controller, EditorTool.roundedRectangle, Icons.rectangle_rounded, 'Rounded', tokens),
+                  _shapeOption(ctx, controller, EditorTool.ellipse, Icons.circle_outlined, 'Circle', tokens),
+                  _shapeOption(ctx, controller, EditorTool.triangle, Icons.change_history_rounded, 'Triangle', tokens),
+                  _shapeOption(ctx, controller, EditorTool.polygon, Icons.hexagon_outlined, 'Polygon', tokens),
+                  _shapeOption(ctx, controller, EditorTool.star, Icons.star_border_rounded, 'Star', tokens),
+                  _shapeOption(ctx, controller, EditorTool.line, Icons.horizontal_rule_rounded, 'Line', tokens),
+                  _shapeOption(ctx, controller, EditorTool.frame, Icons.crop_free_rounded, 'Frame', tokens),
                 ],
               ),
             ],
@@ -1607,6 +1800,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
     EditorTool tool,
     IconData icon,
     String label,
+    FormaThemeTokens tokens,
   ) {
     return InkWell(
       onTap: () {
@@ -1616,18 +1810,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color: FormaColors.primaryBlue.withValues(alpha: 0.08),
+          color: tokens.accent.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: FormaColors.primaryBlue.withValues(alpha: 0.18)),
+          border: Border.all(color: tokens.accent.withValues(alpha: 0.20)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 22, color: FormaColors.primaryBlue),
+            Icon(icon, size: 24, color: tokens.accent),
             const SizedBox(height: 4),
             Text(
               label,
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: tokens.textMain),
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -1638,26 +1832,39 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
     );
   }
 
-  void _showMobileTextMenu(BuildContext context, EditorController controller) {
+  void _showMobileTextMenu(
+    BuildContext context,
+    EditorController controller,
+    FormaThemeTokens tokens,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Container(
           decoration: BoxDecoration(
-            color: isDark ? FormaColors.darkSurface : FormaColors.lightSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            border: Border.all(
-              color: isDark ? FormaColors.darkBorder : FormaColors.lightBorder,
-            ),
+            color: tokens.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+            border: Border.all(color: tokens.borderSubtle),
           ),
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: tokens.borderSubtle,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1665,20 +1872,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                     'ADD TYPOGRAPHY & TEXT',
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w800,
                       letterSpacing: 0.8,
-                      color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+                      color: tokens.textMuted,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+                    icon: Icon(Icons.close_rounded, size: 20, color: tokens.textMuted),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               _textOptionCard(
                 ctx,
                 controller,
@@ -1687,6 +1892,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                 fontSize: 32.0,
                 fontWeight: 700,
                 icon: Icons.title_rounded,
+                tokens: tokens,
               ),
               const SizedBox(height: 8),
               _textOptionCard(
@@ -1697,6 +1903,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                 fontSize: 22.0,
                 fontWeight: 600,
                 icon: Icons.text_fields_rounded,
+                tokens: tokens,
               ),
               const SizedBox(height: 8),
               _textOptionCard(
@@ -1707,12 +1914,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                 fontSize: 16.0,
                 fontWeight: 400,
                 icon: Icons.short_text_rounded,
+                tokens: tokens,
               ),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
+                    foregroundColor: tokens.accent,
+                    side: BorderSide(color: tokens.accent),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
@@ -1739,6 +1949,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
     required double fontSize,
     required int fontWeight,
     required IconData icon,
+    required FormaThemeTokens tokens,
   }) {
     return InkWell(
       onTap: () {
@@ -1759,19 +1970,19 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: FormaColors.primaryBlue.withValues(alpha: 0.06),
+          color: tokens.wellBg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: FormaColors.primaryBlue.withValues(alpha: 0.16)),
+          border: Border.all(color: tokens.borderSubtle),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: FormaColors.primaryBlue.withValues(alpha: 0.12),
+                color: tokens.accent.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, size: 20, color: FormaColors.primaryBlue),
+              child: Icon(icon, size: 20, color: tokens.accent),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1783,7 +1994,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: Theme.of(ctx).brightness == Brightness.dark ? Colors.white : FormaColors.lightTextMain,
+                      color: tokens.textMain,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -1791,15 +2002,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                     subtitle,
                     style: TextStyle(
                       fontSize: 11,
-                      color: Theme.of(ctx).brightness == Brightness.dark
-                          ? FormaColors.darkTextMuted
-                          : FormaColors.lightTextMuted,
+                      color: tokens.textMuted,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.add_circle_outline_rounded, size: 18, color: FormaColors.primaryBlue),
+            Icon(Icons.add_circle_outline_rounded, size: 18, color: tokens.accent),
           ],
         ),
       ),

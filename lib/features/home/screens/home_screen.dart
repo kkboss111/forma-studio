@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import '../../../domain/models/project_model.dart';
 import '../../../domain/models/page_model.dart';
+import '../../../domain/models/node_types.dart';
 import '../../../app/theme/forma_colors.dart';
 import '../../../app/theme/forma_theme.dart';
 import '../../../app/theme/neumorphic.dart';
@@ -46,7 +47,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isLoading = true;
   String _searchQuery = '';
   String _activeTab = 'recent'; // 'recent', 'templates', 'favorites'
+  String _projectFilter = 'all'; // 'all', 'recent', 'starred'
   String _templateCategory = 'components'; // 'components' vs 'screens'
+  final TextEditingController _searchController = TextEditingController();
 
   // Bulk Selection
   bool _isBulkSelectMode = false;
@@ -58,6 +61,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     _loadProjects();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadProjects() async {
@@ -1103,6 +1112,104 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  Widget _buildThemePickerTriggerPill(
+    BuildContext context,
+    FormaThemeTokens tokens,
+    bool isDark, {
+    bool isCompact = false,
+  }) {
+    final settings = ref.watch(settingsProvider);
+
+    String themeLabel;
+    List<Color> orbColors;
+    switch (settings.themeMode) {
+      case FormaThemeMode.light:
+        themeLabel = 'Light';
+        orbColors = const [Color(0xFFFBBF24), Color(0xFFF59E0B)];
+        break;
+      case FormaThemeMode.dark:
+        themeLabel = 'Obsidian';
+        orbColors = const [Color(0xFF1E293B), Color(0xFF0F172A)];
+        break;
+      case FormaThemeMode.liquidGlass:
+        themeLabel = 'Liquid Glass';
+        orbColors = const [Color(0xFF38BDF8), Color(0xFF0284C7)];
+        break;
+      case FormaThemeMode.glassmorphism:
+        themeLabel = 'Cosmic';
+        orbColors = const [Color(0xFF818CF8), Color(0xFFC084FC)];
+        break;
+      case FormaThemeMode.system:
+        themeLabel = 'System';
+        orbColors = [tokens.accent, tokens.accent.withValues(alpha: 0.6)];
+        break;
+    }
+
+    return InkWell(
+      onTap: () => FormaThemePickerDialog.show(context),
+      borderRadius: BorderRadius.circular(20),
+      child: Tooltip(
+        message: 'Studio Themes: $themeLabel (Tap to switch)',
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 8 : 12,
+            vertical: 6,
+          ),
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: tokens.accent.withValues(alpha: 0.35),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 11,
+                height: 11,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(colors: orbColors),
+                  boxShadow: [
+                    BoxShadow(
+                      color: orbColors.first.withValues(alpha: 0.6),
+                      blurRadius: 4,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                  border: Border.all(color: Colors.white70, width: 0.8),
+                ),
+              ),
+              if (!isCompact) ...[
+                const SizedBox(width: 7),
+                Text(
+                  themeLabel,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : FormaColors.lightTextMain,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.unfold_more_rounded,
+                  size: 14,
+                  color: isDark
+                      ? FormaColors.darkTextMuted
+                      : FormaColors.lightTextMuted,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMobileHeader(BuildContext context, bool isDark) {
     final tokens = FormaTheme.tokensOf(context);
     final screenWidth = MediaQuery.of(context).size.width;
@@ -1218,18 +1325,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               const SizedBox(width: 6),
 
-              // Studio Themes Palette (Direct access to all 4 themes including Liquid Glass & Cosmic)
-              NeuIconButton(
-                icon: Icons.palette_outlined,
-                size: 36,
-                iconSize: 18,
-                iconColor: tokens.accent,
-                tooltip: 'Studio Themes (Light, Dark, Liquid, Cosmic)',
-                onPressed: () => FormaThemePickerDialog.show(context),
+              // Theme Picker Trigger with Live Preview Pill
+              _buildThemePickerTriggerPill(
+                context,
+                tokens,
+                isDark,
+                isCompact: screenWidth < 460,
               ),
               const SizedBox(width: 6),
 
-              // New Artboard Button
+              // Quick 'New Artboard' Button
               NeuIconButton(
                 icon: Icons.add_rounded,
                 size: 36,
@@ -1301,12 +1406,81 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  Widget _buildFilterPill(
+    String filterKey,
+    String label,
+    IconData icon,
+    bool isDark,
+    FormaThemeTokens tokens,
+  ) {
+    final isSelected = _projectFilter == filterKey;
+    return InkWell(
+      onTap: () => setState(() => _projectFilter = filterKey),
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? tokens.accent
+              : (isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.04)),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? tokens.accent
+                : (isDark ? Colors.white12 : Colors.black12),
+            width: 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: tokens.accent.withValues(alpha: 0.35),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 13,
+              color: isSelected
+                  ? Colors.white
+                  : (isDark
+                      ? FormaColors.darkTextMuted
+                      : FormaColors.lightTextMuted),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected
+                    ? Colors.white
+                    : (isDark
+                        ? FormaColors.darkTextMain
+                        : FormaColors.lightTextMain),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMainContent(
     BuildContext context,
     bool isDark,
     bool isGlass,
     AppSettings settings,
   ) {
+    final tokens = FormaTheme.tokensOf(context);
     if (_activeTab == 'templates') {
       return _buildTemplatesView(context, isDark, isGlass, settings);
     }
@@ -1319,11 +1493,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           !p.name.toLowerCase().contains(_searchQuery.toLowerCase())) {
         return false;
       }
+      if (_projectFilter == 'starred' && !p.isFavorite) {
+        return false;
+      }
       if (_activeTab == 'favorites' && !p.isFavorite) {
         return false;
       }
       return true;
     }).toList();
+
+    if (_projectFilter == 'recent') {
+      filtered.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -1378,7 +1559,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             children: [
               Expanded(
                 child: NeuTextField(
-                  hintText: 'Search designs and mockups...',
+                  hintText: 'Search artboards...',
                   prefixIcon: const Icon(
                     Icons.search_rounded,
                     size: 18,
@@ -1387,10 +1568,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onChanged: (val) => setState(() => _searchQuery = val),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               NeuButton(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
+                  horizontal: 10,
                   vertical: 11,
                 ),
                 tooltip: 'Bulk select and delete designs',
@@ -1401,6 +1582,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   });
                 },
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
                       _isBulkSelectMode
@@ -1425,20 +1607,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               NeuButton(
                 isActive: true,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
+                  horizontal: 10,
                   vertical: 11,
                 ),
+                tooltip: 'New Artboard',
                 onPressed: _createBlankProject,
                 child: const Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.add_rounded, size: 16, color: Colors.white),
-                    SizedBox(width: 4),
+                    SizedBox(width: 3),
                     Text(
-                      'New Design',
+                      'New',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -1450,7 +1634,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
+
+          // Clean Filter Pills Row (All, Recent, Starred) + Theme picker trigger
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildFilterPill('all', 'All (${_projects.length})', Icons.grid_view_rounded, isDark, tokens),
+                      const SizedBox(width: 6),
+                      _buildFilterPill('recent', 'Recent', Icons.schedule_rounded, isDark, tokens),
+                      const SizedBox(width: 6),
+                      _buildFilterPill('starred', 'Starred (${_projects.where((p) => p.isFavorite).length})', Icons.star_rounded, isDark, tokens),
+                    ],
+                  ),
+                ),
+              ),
+              if (MediaQuery.of(context).size.width >= 600) ...[
+                const SizedBox(width: 8),
+                _buildThemePickerTriggerPill(context, tokens, isDark, isCompact: false),
+              ],
+            ],
+          ),
+          const SizedBox(height: 14),
 
           // First-Run Welcome Card
           if (!settings.haveUserStartedApp) ...[
@@ -1462,14 +1672,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                _activeTab == 'favorites' ? 'Favorite Projects' : 'Recent Work',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: isDark
-                      ? FormaColors.darkTextMain
-                      : FormaColors.lightTextMain,
+              Expanded(
+                child: Text(
+                  _projectFilter == 'starred'
+                      ? 'Starred Artboards'
+                      : (_projectFilter == 'recent' ? 'Recent Work' : 'All Artboards'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? FormaColors.darkTextMain
+                        : FormaColors.lightTextMain,
+                  ),
                 ),
               ),
               if (_isBulkSelectMode)
@@ -1510,7 +1726,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 )
               else
                 Text(
-                  '${filtered.length} files',
+                  '${filtered.length} artboards',
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark
@@ -1522,33 +1738,56 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Responsive Projects Grid (Fits 4 cards on mobile screen)
+          // Responsive Projects Grid
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : LayoutBuilder(
                     builder: (context, constraints) {
-                      // Calculate columns: on mobile screens < 600px width, use 2 columns
-                      final isMobile = constraints.maxWidth < 600;
-                      final crossAxisCount = isMobile
-                          ? 2
-                          : (constraints.maxWidth / 220).floor().clamp(2, 6);
+                      final width = constraints.maxWidth;
+                      final int crossAxisCount;
+                      final double aspectRatio;
 
-                      double aspectRatio = 1.05;
-                      if (settings.cardDensity == CardDensity.compact) {
-                        aspectRatio = isMobile ? 1.05 : 1.15;
-                      } else if (settings.cardDensity == CardDensity.spacious) {
-                        aspectRatio = isMobile ? 0.90 : 1.0;
+                      if (width < 600) {
+                        // 1 column on vertical mobile phones (<600px width)
+                        crossAxisCount = 1;
+                        if (settings.cardDensity == CardDensity.compact) {
+                          aspectRatio = 1.45;
+                        } else if (settings.cardDensity == CardDensity.spacious) {
+                          aspectRatio = 1.25;
+                        } else {
+                          aspectRatio = 1.35;
+                        }
+                      } else if (width < 1000) {
+                        // 2 columns on tablets (600px <= width < 1000px)
+                        crossAxisCount = 2;
+                        if (settings.cardDensity == CardDensity.compact) {
+                          aspectRatio = 1.25;
+                        } else if (settings.cardDensity == CardDensity.spacious) {
+                          aspectRatio = 1.05;
+                        } else {
+                          aspectRatio = 1.15;
+                        }
+                      } else {
+                        // 3-4 columns on desktop (>=1000px)
+                        crossAxisCount = (width / 320).floor().clamp(3, 4);
+                        if (settings.cardDensity == CardDensity.compact) {
+                          aspectRatio = 1.20;
+                        } else if (settings.cardDensity == CardDensity.spacious) {
+                          aspectRatio = 1.0;
+                        } else {
+                          aspectRatio = 1.10;
+                        }
                       }
 
-                      // Total items: 1 (Permanent New Design Card) + filtered projects
+                      // Total items: 1 (Permanent New Artboard Card) + filtered projects
                       final totalItems = 1 + filtered.length;
 
                       return GridView.builder(
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: crossAxisCount,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 14,
+                          crossAxisSpacing: 14,
                           childAspectRatio: aspectRatio,
                         ),
                         itemCount: totalItems,
@@ -1670,7 +1909,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  // --- PERMANENT "NEW DESIGN" CARD ---
+  // --- PERMANENT "NEW ARTBOARD" CARD ---
   Widget _buildNewDesignCard(
     BuildContext context,
     bool isDark,
@@ -1679,95 +1918,113 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   ) {
     final tokens = FormaTheme.tokensOf(context);
 
-    final content = InkWell(
-      onTap: _createBlankProject,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: tokens.accent.withValues(alpha: isDark ? 0.35 : 0.28),
-            width: 1.5,
-          ),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDark
-                ? [
-                    tokens.accent.withValues(alpha: 0.08),
-                    tokens.accent.withValues(alpha: 0.02),
-                  ]
-                : [
-                    tokens.accent.withValues(alpha: 0.06),
-                    tokens.accent.withValues(alpha: 0.01),
-                  ],
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [tokens.accent, tokens.accent.withValues(alpha: 0.75)],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: tokens.accent.withValues(alpha: 0.35),
-                    offset: const Offset(0, 4),
-                    blurRadius: 14,
-                  ),
+    final cardInner = Container(
+      decoration: BoxDecoration(
+        color: isGlass
+            ? tokens.surface
+            : (isDark ? FormaColors.darkSurface : FormaColors.lightSurface),
+        borderRadius: BorderRadius.circular(19),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  tokens.accent.withValues(alpha: 0.08),
+                  tokens.accent.withValues(alpha: 0.02),
+                ]
+              : [
+                  tokens.accent.withValues(alpha: 0.06),
+                  tokens.accent.withValues(alpha: 0.01),
                 ],
-              ),
-              child: const Icon(
-                Icons.add_rounded,
-                size: 30,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'New Design',
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : FormaColors.lightTextMain,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              'Create blank artboard',
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w500,
-                color: isDark
-                    ? FormaColors.darkTextMuted
-                    : FormaColors.lightTextMuted,
-              ),
-            ),
-          ],
         ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [tokens.accent, tokens.accent.withValues(alpha: 0.75)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: tokens.accent.withValues(alpha: 0.35),
+                  offset: const Offset(0, 4),
+                  blurRadius: 14,
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.add_rounded,
+              size: 32,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'New Artboard',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : FormaColors.lightTextMain,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Create blank artboard',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: isDark
+                  ? FormaColors.darkTextMuted
+                  : FormaColors.lightTextMuted,
+            ),
+          ),
+        ],
       ),
     );
 
+    final cardWithGradientEdge = Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            tokens.accent.withValues(alpha: isDark ? 0.45 : 0.35),
+            tokens.accent.withValues(alpha: 0.1),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: tokens.accent.withValues(alpha: 0.12),
+            offset: const Offset(0, 4),
+            blurRadius: 14,
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(1.2),
+      child: cardInner,
+    );
+
+    Widget resultCard = cardWithGradientEdge;
     if (isGlass) {
-      return LiquidGlassBox(
-        radius: 18,
+      resultCard = LiquidGlassBox(
+        radius: 20,
         blur: settings.glassBlur,
         opacity: settings.glassOpacity,
         hasSpecular: settings.glassSpecular,
         hasSheen: settings.glassSheen,
-        child: content,
+        child: resultCard,
       );
     }
 
-    return NeuCard(
-      radius: 18,
-      padding: EdgeInsets.zero,
-      child: content,
+    return _TactileCard(
+      onTap: _createBlankProject,
+      child: resultCard,
     );
   }
 
@@ -1777,13 +2034,398 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     bool isGlass,
     AppSettings settings,
   ) {
+    final tokens = FormaTheme.tokensOf(context);
     final dateFormat = DateFormat('MMM d • h:mm a');
     final isSelected = _selectedProjectIds.contains(project.id);
     final firstPageBg = project.pages.isNotEmpty
         ? project.pages.first.backgroundColor
-        : Colors.white;
+        : (isDark ? const Color(0xFF1E293B) : Colors.white);
 
-    final cardContent = InkWell(
+    final cardInner = Container(
+      decoration: BoxDecoration(
+        color: isGlass
+            ? tokens.surface
+            : (isDark ? FormaColors.darkSurface : FormaColors.lightSurface),
+        borderRadius: BorderRadius.circular(19),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Live Artboard Preview Well
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: firstPageBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : Colors.black.withValues(alpha: 0.08),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          offset: const Offset(0, 2),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CustomPaint(
+                            size: Size.infinite,
+                            painter: _LiveArtboardThumbnailPainter(
+                              project: project,
+                              isDark: isDark,
+                              pageBg: firstPageBg,
+                            ),
+                          ),
+                          if (project.nodes.isEmpty)
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.draw_rounded,
+                                  size: 28,
+                                  color: FormaColors.primaryBlue.withValues(alpha: 0.8),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Empty Artboard',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: (firstPageBg.computeLuminance() > 0.5)
+                                        ? Colors.black54
+                                        : Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Top-Left: Layer Count Badge
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white24, width: 0.5),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.layers_rounded, size: 10, color: Colors.white70),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${project.nodes.length} ${project.nodes.length == 1 ? "layer" : "layers"}',
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Top-Right: 1-Click Favorite Button
+                if (!_isBulkSelectMode)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: GestureDetector(
+                      onTap: () => _toggleFavorite(project),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: project.isFavorite
+                              ? Colors.pinkAccent.withValues(alpha: 0.28)
+                              : Colors.black.withValues(alpha: 0.5),
+                          border: Border.all(
+                            color: project.isFavorite
+                                ? Colors.pinkAccent.withValues(alpha: 0.8)
+                                : Colors.white24,
+                            width: 0.8,
+                          ),
+                          boxShadow: project.isFavorite
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.pinkAccent.withValues(alpha: 0.4),
+                                    blurRadius: 8,
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Icon(
+                          project.isFavorite
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
+                          size: 14,
+                          color: project.isFavorite
+                              ? Colors.pinkAccent
+                              : Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Bulk selection checkbox
+                if (_isBulkSelectMode)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                      ),
+                      child: Icon(
+                        isSelected
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        color: isSelected
+                            ? FormaColors.primaryBlue
+                            : Colors.grey,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Project Title & Options Row
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  project.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? FormaColors.darkTextMain
+                        : FormaColors.lightTextMain,
+                  ),
+                ),
+              ),
+              if (!_isBulkSelectMode)
+                PopupMenuButton<String>(
+                  padding: EdgeInsets.zero,
+                  icon: Icon(
+                    Icons.more_vert_rounded,
+                    size: 16,
+                    color: isDark
+                        ? FormaColors.darkTextMuted
+                        : FormaColors.lightTextMuted,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  onSelected: (val) {
+                    switch (val) {
+                      case 'favorite':
+                        _toggleFavorite(project);
+                        break;
+                      case 'properties':
+                        _showProjectPropertiesDialog(project);
+                        break;
+                      case 'duplicate':
+                        _duplicateProject(project);
+                        break;
+                      case 'export':
+                        _openProject(project);
+                        break;
+                      case 'share':
+                        _shareProject(project);
+                        break;
+                      case 'delete':
+                        _deleteProject(project.id);
+                        break;
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    PopupMenuItem(
+                      value: 'favorite',
+                      child: Row(
+                        children: [
+                          Icon(
+                            project.isFavorite
+                                ? Icons.favorite_rounded
+                                : Icons.favorite_border_rounded,
+                            size: 16,
+                            color: project.isFavorite ? Colors.pinkAccent : null,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(project.isFavorite ? 'Remove Favorite' : 'Favorite'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'properties',
+                      child: Row(
+                        children: [
+                          Icon(Icons.tune_rounded, size: 16),
+                          SizedBox(width: 8),
+                          Text('Properties'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'duplicate',
+                      child: Row(
+                        children: [
+                          Icon(Icons.copy_rounded, size: 16),
+                          SizedBox(width: 8),
+                          Text('Duplicate'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'export',
+                      child: Row(
+                        children: [
+                          Icon(Icons.download_rounded, size: 16),
+                          SizedBox(width: 8),
+                          Text('Export'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'share',
+                      child: Row(
+                        children: [
+                          Icon(Icons.share_outlined, size: 16),
+                          SizedBox(width: 8),
+                          Text('Share'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline_rounded, size: 16, color: FormaColors.dangerRed),
+                          SizedBox(width: 8),
+                          Text('Delete', style: TextStyle(color: FormaColors.dangerRed)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 3),
+
+          // Metadata: Clock Icon + Formatted Timestamp + Multi-Page Count
+          Row(
+            children: [
+              Icon(
+                Icons.access_time_rounded,
+                size: 11.5,
+                color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                dateFormat.format(project.updatedAt),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: isDark
+                      ? FormaColors.darkTextMuted
+                      : FormaColors.lightTextMuted,
+                ),
+              ),
+              const Spacer(),
+              if (project.pages.length > 1)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: tokens.accent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${project.pages.length} pages',
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                      color: tokens.accent,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    // Outer Gradient Edge Wrapper
+    final cardWithGradientEdge = Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  tokens.accent.withValues(alpha: 0.40),
+                  tokens.accent.withValues(alpha: 0.10),
+                  Colors.white.withValues(alpha: 0.04),
+                ]
+              : [
+                  tokens.accent.withValues(alpha: 0.35),
+                  tokens.accent.withValues(alpha: 0.08),
+                  Colors.black.withValues(alpha: 0.04),
+                ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.3)
+                : tokens.accent.withValues(alpha: 0.08),
+            offset: const Offset(0, 4),
+            blurRadius: 14,
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(1.2), // 1.2px Gradient edge
+      child: cardInner,
+    );
+
+    Widget resultCard = cardWithGradientEdge;
+    if (isGlass) {
+      resultCard = LiquidGlassBox(
+        radius: 20,
+        blur: settings.glassBlur,
+        opacity: settings.glassOpacity,
+        hasSpecular: settings.glassSpecular,
+        hasSheen: settings.glassSheen,
+        child: resultCard,
+      );
+    }
+
+    return _TactileCard(
       onTap: () {
         if (_isBulkSelectMode) {
           setState(() {
@@ -1797,339 +2439,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           _openProject(project);
         }
       },
-      borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Preview Miniature Artboard Well
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: firstPageBg,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.12)
-                              : Colors.black.withValues(alpha: 0.08),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            offset: const Offset(0, 2),
-                            blurRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            CustomPaint(
-                              size: Size.infinite,
-                              painter: _MiniArtboardGridPainter(isDark: isDark),
-                            ),
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.draw_rounded,
-                                  size: 28,
-                                  color: FormaColors.primaryBlue.withValues(alpha: 0.8),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  project.nodes.isEmpty
-                                      ? 'Blank Artboard'
-                                      : '${project.nodes.length} Elements',
-                                  style: TextStyle(
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: (firstPageBg.computeLuminance() > 0.5)
-                                        ? Colors.black54
-                                        : Colors.white70,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Top-Left: Layer Count Pill
-                  Positioned(
-                    top: 6,
-                    left: 6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: Colors.white24, width: 0.5),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.layers_rounded, size: 10, color: Colors.white70),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${project.nodes.length} ${project.nodes.length == 1 ? "layer" : "layers"}',
-                            style: const TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Top-Right: Direct 1-Click Favorite Toggle
-                  if (!_isBulkSelectMode)
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: InkWell(
-                        onTap: () => _toggleFavorite(project),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          padding: const EdgeInsets.all(5),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: project.isFavorite
-                                ? Colors.pinkAccent.withValues(alpha: 0.25)
-                                : Colors.black.withValues(alpha: 0.45),
-                            border: Border.all(
-                              color: project.isFavorite
-                                  ? Colors.pinkAccent.withValues(alpha: 0.7)
-                                  : Colors.white24,
-                              width: 0.5,
-                            ),
-                          ),
-                          child: Icon(
-                            project.isFavorite
-                                ? Icons.favorite_rounded
-                                : Icons.favorite_border_rounded,
-                            size: 13,
-                            color: project.isFavorite
-                                ? Colors.pinkAccent
-                                : Colors.white70,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                  // Bulk selection checkbox
-                  if (_isBulkSelectMode)
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                        ),
-                        child: Icon(
-                          isSelected
-                              ? Icons.check_circle_rounded
-                              : Icons.radio_button_unchecked_rounded,
-                          color: isSelected
-                              ? FormaColors.primaryBlue
-                              : Colors.grey,
-                          size: 24,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Project Title & Options Row
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    project.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: isDark
-                          ? FormaColors.darkTextMain
-                          : FormaColors.lightTextMain,
-                    ),
-                  ),
-                ),
-                if (!_isBulkSelectMode)
-                  PopupMenuButton<String>(
-                    padding: EdgeInsets.zero,
-                    icon: Icon(
-                      Icons.more_vert_rounded,
-                      size: 16,
-                      color: isDark
-                          ? FormaColors.darkTextMuted
-                          : FormaColors.lightTextMuted,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    onSelected: (val) {
-                      switch (val) {
-                        case 'favorite':
-                          _toggleFavorite(project);
-                          break;
-                        case 'properties':
-                          _showProjectPropertiesDialog(project);
-                          break;
-                        case 'duplicate':
-                          _duplicateProject(project);
-                          break;
-                        case 'export':
-                          _openProject(project);
-                          break;
-                        case 'share':
-                          _shareProject(project);
-                          break;
-                        case 'delete':
-                          _deleteProject(project.id);
-                          break;
-                      }
-                    },
-                    itemBuilder: (ctx) => [
-                      PopupMenuItem(
-                        value: 'favorite',
-                        child: Row(
-                          children: [
-                            Icon(
-                              project.isFavorite
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded,
-                              size: 16,
-                              color: project.isFavorite ? Colors.pinkAccent : null,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(project.isFavorite ? 'Remove Favorite' : 'Favorite'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'properties',
-                        child: Row(
-                          children: [
-                            Icon(Icons.tune_rounded, size: 16),
-                            SizedBox(width: 8),
-                            Text('Properties'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'duplicate',
-                        child: Row(
-                          children: [
-                            Icon(Icons.copy_rounded, size: 16),
-                            SizedBox(width: 8),
-                            Text('Duplicate'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'export',
-                        child: Row(
-                          children: [
-                            Icon(Icons.download_rounded, size: 16),
-                            SizedBox(width: 8),
-                            Text('Export'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'share',
-                        child: Row(
-                          children: [
-                            Icon(Icons.share_outlined, size: 16),
-                            SizedBox(width: 8),
-                            Text('Share'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_outline_rounded, size: 16, color: FormaColors.dangerRed),
-                            SizedBox(width: 8),
-                            Text('Delete', style: TextStyle(color: FormaColors.dangerRed)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-
-            const SizedBox(height: 2),
-
-            // Metadata: Clock Icon + Formatted Date + Multi-Page Count
-            Row(
-              children: [
-                Icon(
-                  Icons.access_time_rounded,
-                  size: 11,
-                  color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  dateFormat.format(project.updatedAt),
-                  style: TextStyle(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w500,
-                    color: isDark
-                        ? FormaColors.darkTextMuted
-                        : FormaColors.lightTextMuted,
-                  ),
-                ),
-                const Spacer(),
-                if (project.pages.length > 1)
-                  Text(
-                    '${project.pages.length} pages',
-                    style: const TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: FormaColors.primaryBlue,
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (isGlass) {
-      return LiquidGlassBox(
-        radius: 18,
-        blur: settings.glassBlur,
-        opacity: settings.glassOpacity,
-        hasSpecular: settings.glassSpecular,
-        hasSheen: settings.glassSheen,
-        child: cardContent,
-      );
-    }
-
-    return NeuCard(
-      radius: 18,
-      padding: EdgeInsets.zero,
-      child: cardContent,
+      child: resultCard,
     );
   }
 
@@ -2552,25 +2862,179 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class _MiniArtboardGridPainter extends CustomPainter {
+class _LiveArtboardThumbnailPainter extends CustomPainter {
+  final ProjectModel project;
   final bool isDark;
-  const _MiniArtboardGridPainter({required this.isDark});
+  final Color pageBg;
+
+  _LiveArtboardThumbnailPainter({
+    required this.project,
+    required this.isDark,
+    required this.pageBg,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
+    if (size.width <= 0 || size.height <= 0) return;
+
+    // Draw blueprint grid lines
+    final gridPaint = Paint()
       ..color = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04)
       ..strokeWidth = 1.0;
-    const step = 16.0;
+    const step = 14.0;
     for (double x = 0; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
     }
     for (double y = 0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
+
+    if (project.nodes.isEmpty) return;
+
+    // Calculate bounding box of all visible nodes
+    double minX = double.infinity;
+    double minY = double.infinity;
+    double maxX = -double.infinity;
+    double maxY = -double.infinity;
+
+    for (final node in project.nodes.values) {
+      if (!node.isVisible) continue;
+      if (node.x < minX) minX = node.x;
+      if (node.y < minY) minY = node.y;
+      if (node.x + node.width > maxX) maxX = node.x + node.width;
+      if (node.y + node.height > maxY) maxY = node.y + node.height;
+    }
+
+    if (!minX.isFinite || !maxX.isFinite || maxX <= minX || maxY <= minY) {
+      return;
+    }
+
+    final contentWidth = maxX - minX;
+    final contentHeight = maxY - minY;
+
+    const padding = 16.0;
+    final availW = math.max(10.0, size.width - padding * 2);
+    final availH = math.max(10.0, size.height - padding * 2);
+
+    final scaleX = availW / contentWidth;
+    final scaleY = availH / contentHeight;
+    final scale = math.min(scaleX, scaleY).clamp(0.001, 1.0);
+
+    final offsetX = padding + (availW - contentWidth * scale) / 2 - minX * scale;
+    final offsetY = padding + (availH - contentHeight * scale) / 2 - minY * scale;
+
+    canvas.save();
+    canvas.clipRRect(RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      const Radius.circular(12),
+    ));
+
+    for (final node in project.nodes.values) {
+      if (!node.isVisible) continue;
+
+      final nx = node.x * scale + offsetX;
+      final ny = node.y * scale + offsetY;
+      final nw = math.max(2.0, node.width * scale);
+      final nh = math.max(2.0, node.height * scale);
+
+      Color fillColor = FormaColors.primaryBlue.withValues(alpha: 0.6);
+      if (node.fills.isNotEmpty && node.fills.first.isVisible) {
+        fillColor = node.fills.first.color.withValues(alpha: (node.fills.first.opacity * node.opacity).clamp(0.0, 1.0));
+      }
+
+      final rect = Rect.fromLTWH(nx, ny, nw, nh);
+      final fillPaint = Paint()
+        ..color = fillColor
+        ..style = PaintingStyle.fill;
+
+      if (node.type == NodeType.ellipse) {
+        canvas.drawOval(rect, fillPaint);
+      } else {
+        final radius = Radius.circular(math.min(node.cornerRadii.topLeft * scale, 6.0));
+        canvas.drawRRect(RRect.fromRectAndRadius(rect, radius), fillPaint);
+      }
+
+      final strokePaint = Paint()
+        ..color = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.12)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0;
+      if (node.type == NodeType.ellipse) {
+        canvas.drawOval(rect, strokePaint);
+      } else {
+        final radius = Radius.circular(math.min(node.cornerRadii.topLeft * scale, 6.0));
+        canvas.drawRRect(RRect.fromRectAndRadius(rect, radius), strokePaint);
+      }
+    }
+
+    canvas.restore();
   }
 
   @override
-  bool shouldRepaint(covariant _MiniArtboardGridPainter oldDelegate) =>
-      oldDelegate.isDark != isDark;
+  bool shouldRepaint(covariant _LiveArtboardThumbnailPainter oldDelegate) =>
+      oldDelegate.project.updatedAt != project.updatedAt ||
+      oldDelegate.isDark != isDark ||
+      oldDelegate.pageBg != pageBg;
+}
+
+class _TactileCard extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _TactileCard({
+    required this.child,
+    required this.onTap,
+  });
+
+  @override
+  State<_TactileCard> createState() => _TactileCardState();
+}
+
+class _TactileCardState extends State<_TactileCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+      reverseDuration: const Duration(milliseconds: 220),
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.965).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeOutBack,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) {
+        _controller.reverse();
+        widget.onTap();
+      },
+      onTapCancel: () => _controller.reverse(),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedBuilder(
+        animation: _scale,
+        builder: (context, child) => Transform.scale(
+          scale: _scale.value,
+          child: child,
+        ),
+        child: widget.child,
+      ),
+    );
+  }
 }
