@@ -15,6 +15,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.41.4'
           channel: 'stable'
           cache: true
 
@@ -46,6 +47,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.41.4'
           channel: 'stable'
           cache: true
 
@@ -55,13 +57,8 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
-      - name: Locate Generated APK
-        run: |
-          ls -la build/app/outputs/flutter-apk/
-          find build/app/outputs/ -type f -name "*.apk"
-
       - name: Package Android APK Release
         uses: actions/upload-artifact@v4
         with:
           name: FormaStudio-Android-APK
-          path: build/app/outputs/flutter-apk/*.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
