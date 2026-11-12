@@ -1,7 +1,7 @@
 name: Build Windows & Android Release
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, ci-debug ]
   workflow_dispatch:
 
 jobs:
@@ -52,8 +52,15 @@ jobs:
       - name: Get Dependencies
         run: flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Build APK Verbose
+        run: flutter build apk --release -v 2>&1 | tee apk_build.log
+
+      - name: Upload Build Log On Failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-log
+          path: apk_build.log
 
       - name: Package Android APK Release
         uses: actions/upload-artifact@v4
