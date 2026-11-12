@@ -87,6 +87,57 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(HomeScreen), findsOneWidget);
     });
+
+    testWidgets('Updates tab renders v0.4.0 changelog without RenderFlex overflow on 375x812', (tester) async {
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      FlutterErrorDetails? caught;
+      final oldHandler = FlutterError.onError;
+      FlutterError.onError = (details) {
+        caught = details;
+        oldHandler?.call(details);
+      };
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: FormaTheme.light(),
+            home: const HomeScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Verify v0.4 badge is present on home
+      expect(find.text('v0.4 (Studio Edition)'), findsWidgets);
+
+      // Tap 'Updates' tab in bottom nav
+      final updatesTab = find.text('Updates');
+      expect(updatesTab, findsOneWidget);
+      await tester.tap(updatesTab);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      if (caught != null) {
+        for (final info in caught!.informationCollector?.call() ?? <DiagnosticsNode>[]) {
+          debugPrint('COLLECTOR: ${info.name}: ${info.toDescription()}');
+        }
+      }
+
+      final err = tester.takeException();
+      expect(err, isNull);
+      expect(find.text('v0.4.0 (Latest Release)'), findsOneWidget);
+      expect(find.text('Multiplayer & Icon Studio Edition'), findsOneWidget);
+      expect(find.text("What's New & Version Changelog"), findsOneWidget);
+      expect(find.text('Open 10-Page Manual'), findsOneWidget);
+    });
   });
 
   group('SettingsScreen Mobile Stacked Cards UX', () {
@@ -177,10 +228,52 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('About Forma Studio'), findsOneWidget);
       expect(find.text('FORMA STUDIO'), findsOneWidget);
+      expect(find.text('v0.4.0 (Studio Release)'), findsOneWidget);
+      expect(find.textContaining('SQLite'), findsNothing);
 
       final roadmapTitle = find.text('Roadmap & Future Releases (Local First)');
       await tester.scrollUntilVisible(roadmapTitle, 200, scrollable: find.byType(Scrollable).last);
       expect(roadmapTitle, findsOneWidget);
+
+      final booleanSyncTitle = find.text('Non-Destructive Boolean Geometry & Figma Live Sync');
+      await tester.scrollUntilVisible(booleanSyncTitle, 200, scrollable: find.byType(Scrollable).last);
+      expect(booleanSyncTitle, findsOneWidget);
+      expect(find.textContaining('SQLite'), findsNothing);
+    });
+  });
+
+  group('HomeScreen v0.4.0 Changelog Verification', () {
+    testWidgets('Updates tab displays v0.4.0 release notes including multiplayer, HTML importer, and removed items', (tester) async {
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: FormaTheme.light(),
+            home: const HomeScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Navigate to Updates / Changelog tab
+      await tester.tap(find.text('WHATS NEW & UPDATES'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('v0.4.0 (Latest Release)'), findsOneWidget);
+      expect(find.text('Multiplayer & Icon Studio Edition'), findsOneWidget);
+      expect(find.textContaining('Multiplayer Collaboration (Firebase + LAN Mesh)'), findsOneWidget);
+      expect(find.textContaining('HTML File Importer'), findsOneWidget);
+      expect(find.textContaining('Removed — Liquid Glass & Cosmic Glassmorphism Themes'), findsOneWidget);
+      expect(find.textContaining('Removed — Simulated Fake Bot Collaborators'), findsOneWidget);
     });
   });
 }

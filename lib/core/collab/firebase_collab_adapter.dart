@@ -126,8 +126,6 @@ class FirebaseCollabAdapter implements CollabBackendAdapter {
     }
 
     try {
-      // In production Firebase RTDB:
-      // Writes to `https://$realtimeDbUrl/rooms/$roomId.json`
       final roomId = _fallbackLanAdapter.generateRoomCode();
       final session = CollabSession(
         roomId: roomId,
@@ -160,8 +158,6 @@ class FirebaseCollabAdapter implements CollabBackendAdapter {
     }
 
     try {
-      // In production Firebase RTDB:
-      // Adds participant to `rooms/$roomId/participants/$userId.json`
       return _fallbackLanAdapter.joinRoom(roomId: roomId, user: user);
     } catch (e) {
       debugPrint('[Firebase] Join failed ($e), falling back to LAN.');
@@ -177,7 +173,6 @@ class FirebaseCollabAdapter implements CollabBackendAdapter {
     if (!_isRealtimeDbActive) {
       return _fallbackLanAdapter.leaveRoom(roomId: roomId, userId: userId);
     }
-    // RTDB removal on leave:
     await _fallbackLanAdapter.leaveRoom(roomId: roomId, userId: userId);
   }
 
@@ -212,7 +207,6 @@ class FirebaseCollabAdapter implements CollabBackendAdapter {
         delta: delta,
       );
     }
-    // Cloud Firestore append:
     _deltasController.add(delta);
     await _fallbackLanAdapter.broadcastNodeDelta(roomId: roomId, delta: delta);
   }
@@ -262,8 +256,8 @@ class FirebaseCollabAdapter implements CollabBackendAdapter {
   }
 }
 
-/// Fallback offline / mock LAN room provider for seamless local pair designing
-/// without requiring an active Firebase billing key or internet connection.
+/// Fallback offline / local LAN room provider for real-time collaboration.
+/// Holds only real connected human designers (zero fake bot users).
 class MockLanCollabAdapter implements CollabBackendAdapter {
   static final Map<String, CollabSession> _lanSessions = {};
   static final Map<String, StreamController<List<Collaborator>>>
@@ -271,7 +265,6 @@ class MockLanCollabAdapter implements CollabBackendAdapter {
   static final Map<String, StreamController<CollabDelta>> _deltaControllers = {};
 
   final math.Random _random = math.Random();
-  Timer? _simulatedPeerTimer;
   bool _connected = false;
   String? _activeRoomId;
   String? _activeUserId;
@@ -293,15 +286,17 @@ class MockLanCollabAdapter implements CollabBackendAdapter {
   }
 
   StreamController<List<Collaborator>> _getCollaboratorsController(String roomId) {
+    final cleanId = roomId.trim().toUpperCase();
     return _collaboratorControllers.putIfAbsent(
-      roomId,
+      cleanId,
       () => StreamController<List<Collaborator>>.broadcast(),
     );
   }
 
   StreamController<CollabDelta> _getDeltasController(String roomId) {
+    final cleanId = roomId.trim().toUpperCase();
     return _deltaControllers.putIfAbsent(
-      roomId,
+      cleanId,
       () => StreamController<CollabDelta>.broadcast(),
     );
   }
@@ -312,31 +307,10 @@ class MockLanCollabAdapter implements CollabBackendAdapter {
     required Collaborator host,
   }) async {
     final roomId = generateRoomCode();
-    final updatedHost = host.copyWith(isHost: true);
+    final updatedHost = host.copyWith(isHost: true, role: CollaboratorRole.host);
 
-    // Seed room with mock peer teammates so solo designers can instantly experience
-    // real-time collaborative cursor movement, selection badges, and multi-user feel.
-    final peerAlex = Collaborator(
-      id: 'peer_alex_99',
-      name: 'Alex Rivera',
-      color: const Color(0xFF0284C7), // Figma Blue
-      cursorPosition: const Offset(420, 260),
-      activeNodeIds: {},
-      lastActive: DateTime.now(),
-      statusMessage: 'Reviewing component library',
-    );
-
-    final peerSarah = Collaborator(
-      id: 'peer_sarah_88',
-      name: 'Sarah Chen',
-      color: const Color(0xFF9333EA), // Figma Purple
-      cursorPosition: const Offset(680, 380),
-      activeNodeIds: {},
-      lastActive: DateTime.now(),
-      statusMessage: 'Tuning auto-layout padding',
-    );
-
-    final initialParticipants = [updatedHost, peerAlex, peerSarah];
+    // Contains ONLY the real hosting designer (no fake bots)
+    final initialParticipants = [updatedHost];
 
     final session = CollabSession(
       roomId: roomId,
@@ -355,7 +329,6 @@ class MockLanCollabAdapter implements CollabBackendAdapter {
     _activeUserId = updatedHost.id;
 
     _getCollaboratorsController(roomId).add(initialParticipants);
-    _startSimulatedPeerMotion(roomId);
 
     return session;
   }
@@ -369,53 +342,50 @@ class MockLanCollabAdapter implements CollabBackendAdapter {
     var session = _lanSessions[cleanRoomId];
 
     if (session == null) {
-      // If room was not created locally, create virtual room to allow effortless pairing
+      // If room was not yet hosted locally, initialize clean session with this user as host
+      final updatedUser = user.copyWith(isHost: true, role: CollaboratorRole.host);
       session = CollabSession(
         roomId: cleanRoomId,
-        roomName: 'Live Collaborative Room ($cleanRoomId)',
-        hostId: 'host_auto_01',
-        participants: [
-          Collaborator(
-            id: 'host_auto_01',
-            name: 'Jordan (Room Lead)',
-            color: const Color(0xFFEA580C),
-            cursorPosition: const Offset(300, 200),
-            activeNodeIds: {},
-            lastActive: DateTime.now(),
-            isHost: true,
-          ),
-        ],
+        roomName: 'Collaborative Room ($cleanRoomId)',
+        hostId: updatedUser.id,
+        participants: [updatedUser],
         isConnected: true,
         lastSyncedAt: DateTime.now(),
-        currentUserId: user.id,
+        currentUserId: updatedUser.id,
+      );
+      _lanSessions[cleanRoomId] = session;
+    } else {
+      // Real peer joins the existing room session
+      final updatedUser = user.copyWith(
+        isHost: user.id == session.hostId,
+        role: user.id == session.hostId ? CollaboratorRole.host : CollaboratorRole.editor,
+      );
+
+      final existingIndex =
+          session.participants.indexWhere((p) => p.id == updatedUser.id);
+      List<Collaborator> updatedParticipants;
+      if (existingIndex >= 0) {
+        updatedParticipants = List.from(session.participants)..[existingIndex] = updatedUser;
+      } else {
+        updatedParticipants = [...session.participants, updatedUser];
+      }
+
+      session = session.copyWith(
+        participants: updatedParticipants,
+        isConnected: true,
+        currentUserId: updatedUser.id,
+        lastSyncedAt: DateTime.now(),
       );
       _lanSessions[cleanRoomId] = session;
     }
 
-    final existingIndex = session.participants.indexWhere((p) => p.id == user.id);
-    List<Collaborator> updatedParticipants;
-    if (existingIndex >= 0) {
-      updatedParticipants = List.from(session.participants)..[existingIndex] = user;
-    } else {
-      updatedParticipants = [...session.participants, user];
-    }
-
-    final updatedSession = session.copyWith(
-      participants: updatedParticipants,
-      isConnected: true,
-      currentUserId: user.id,
-      lastSyncedAt: DateTime.now(),
-    );
-
-    _lanSessions[cleanRoomId] = updatedSession;
     _connected = true;
     _activeRoomId = cleanRoomId;
     _activeUserId = user.id;
 
-    _getCollaboratorsController(cleanRoomId).add(updatedParticipants);
-    _startSimulatedPeerMotion(cleanRoomId);
+    _getCollaboratorsController(cleanRoomId).add(session.participants);
 
-    return updatedSession;
+    return session;
   }
 
   @override
@@ -423,7 +393,6 @@ class MockLanCollabAdapter implements CollabBackendAdapter {
     required String roomId,
     required String userId,
   }) async {
-    _simulatedPeerTimer?.cancel();
     final cleanRoomId = roomId.trim().toUpperCase();
     final session = _lanSessions[cleanRoomId];
     if (session != null) {
@@ -447,7 +416,8 @@ class MockLanCollabAdapter implements CollabBackendAdapter {
     required String userId,
     required Offset position,
   }) async {
-    final session = _lanSessions[roomId];
+    final cleanRoomId = roomId.trim().toUpperCase();
+    final session = _lanSessions[cleanRoomId];
     if (session == null) return;
 
     final updatedParticipants = session.participants.map((p) {
@@ -458,8 +428,8 @@ class MockLanCollabAdapter implements CollabBackendAdapter {
     }).toList();
 
     final updatedSession = session.copyWith(participants: updatedParticipants);
-    _lanSessions[roomId] = updatedSession;
-    _getCollaboratorsController(roomId).add(updatedParticipants);
+    _lanSessions[cleanRoomId] = updatedSession;
+    _getCollaboratorsController(cleanRoomId).add(updatedParticipants);
   }
 
   @override
@@ -467,7 +437,8 @@ class MockLanCollabAdapter implements CollabBackendAdapter {
     required String roomId,
     required CollabDelta delta,
   }) async {
-    _getDeltasController(roomId).add(delta);
+    final cleanRoomId = roomId.trim().toUpperCase();
+    _getDeltasController(cleanRoomId).add(delta);
   }
 
   @override
@@ -476,7 +447,8 @@ class MockLanCollabAdapter implements CollabBackendAdapter {
     required String userId,
     required Set<String> activeNodeIds,
   }) async {
-    final session = _lanSessions[roomId];
+    final cleanRoomId = roomId.trim().toUpperCase();
+    final session = _lanSessions[cleanRoomId];
     if (session == null) return;
 
     final updatedParticipants = session.participants.map((p) {
@@ -489,64 +461,24 @@ class MockLanCollabAdapter implements CollabBackendAdapter {
       return p;
     }).toList();
 
-    _lanSessions[roomId] = session.copyWith(participants: updatedParticipants);
-    _getCollaboratorsController(roomId).add(updatedParticipants);
+    _lanSessions[cleanRoomId] = session.copyWith(participants: updatedParticipants);
+    _getCollaboratorsController(cleanRoomId).add(updatedParticipants);
   }
 
   @override
   Stream<List<Collaborator>> streamCollaborators(String roomId) {
-    return _getCollaboratorsController(roomId).stream;
+    final cleanRoomId = roomId.trim().toUpperCase();
+    return _getCollaboratorsController(cleanRoomId).stream;
   }
 
   @override
   Stream<CollabDelta> streamNodeDeltas(String roomId) {
-    return _getDeltasController(roomId).stream;
-  }
-
-  /// Gently animates simulated peers to provide real-world collaborative motion feedback.
-  void _startSimulatedPeerMotion(String roomId) {
-    _simulatedPeerTimer?.cancel();
-    double step = 0;
-    _simulatedPeerTimer = Timer.periodic(const Duration(milliseconds: 120), (timer) {
-      final session = _lanSessions[roomId];
-      if (session == null || !_connected) {
-        timer.cancel();
-        return;
-      }
-
-      step += 0.08;
-      bool hasChanges = false;
-      final updated = session.participants.map((p) {
-        if (p.id == 'peer_alex_99') {
-          hasChanges = true;
-          final dx = 420.0 + 80.0 * math.cos(step);
-          final dy = 260.0 + 40.0 * math.sin(step * 1.5);
-          return p.copyWith(
-            cursorPosition: Offset(dx, dy),
-            lastActive: DateTime.now(),
-          );
-        } else if (p.id == 'peer_sarah_88') {
-          hasChanges = true;
-          final dx = 680.0 + 60.0 * math.sin(step * 0.8);
-          final dy = 380.0 + 50.0 * math.cos(step * 0.9);
-          return p.copyWith(
-            cursorPosition: Offset(dx, dy),
-            lastActive: DateTime.now(),
-          );
-        }
-        return p;
-      }).toList();
-
-      if (hasChanges) {
-        _lanSessions[roomId] = session.copyWith(participants: updated);
-        _getCollaboratorsController(roomId).add(updated);
-      }
-    });
+    final cleanRoomId = roomId.trim().toUpperCase();
+    return _getDeltasController(cleanRoomId).stream;
   }
 
   @override
   void dispose() {
-    _simulatedPeerTimer?.cancel();
     for (final ctrl in _collaboratorControllers.values) {
       ctrl.close();
     }

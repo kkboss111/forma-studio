@@ -1063,6 +1063,39 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
             },
           ),
         ),
+        if (participants.length <= 1) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: tokens.wellBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: FormaColors.primaryBlue.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.group_add_outlined,
+                  size: 18,
+                  color: FormaColors.primaryBlue,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'No other collaborators connected yet. Share your room code to invite friends!',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: tokens.textMuted,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 14),
 
         // Remote Cursors Toggle Tile

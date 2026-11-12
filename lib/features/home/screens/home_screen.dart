@@ -966,7 +966,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Text(
-                      'v0.3 (Studio Edition)',
+                      'v0.4 (Studio Edition)',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
@@ -1245,7 +1245,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                       ),
                       const Text(
-                        'v0.3 (Studio Edition)',
+                        'v0.4 (Studio Edition)',
                         maxLines: 1,
                         style: TextStyle(
                           fontSize: 8.5,
@@ -1828,7 +1828,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Welcome to Forma Studio v0.3',
+                      'Welcome to Forma Studio v0.4',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
@@ -2612,10 +2612,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 620;
+              final infoColumn = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -2635,8 +2635,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                 ],
-              ),
-              ElevatedButton.icon(
+              );
+
+              final manualButton = ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: FormaColors.primaryBlue,
                   foregroundColor: Colors.white,
@@ -2649,18 +2650,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   context: context,
                   builder: (ctx) => const FormaDocumentationDialog(),
                 ),
-              ),
-            ],
+              );
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    infoColumn,
+                    const SizedBox(height: 12),
+                    manualButton,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: infoColumn),
+                  const SizedBox(width: 12),
+                  manualButton,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 16),
           Expanded(
             child: ListView(
               children: [
                 _buildVersionCard(
-                  version: 'v0.3.0 (Latest Release)',
-                  date: 'Current Studio Edition',
+                  version: 'v0.4.0 (Latest Release)',
+                  date: 'Multiplayer & Icon Studio Edition',
                   tagColor: const Color(0xFF10B981),
                   isLatest: true,
+                  isDark: isDark,
+                  features: const [
+                    '🌐 Multiplayer Collaboration (Firebase + LAN Mesh) & Room Operator Menu: Instant 1-click Live Room hosting with 6-character codes, real-time remote cursors & selection badges, live node delta sync, and full Room Operator Menu (roles, room lock, kick, force sync).',
+                    '📄 HTML File Importer: Import .html / .htm layouts directly into native Forma Studio design frames, rectangles, and styled text nodes.',
+                    '🎨 Bounded Icon Canvas Studio & Multi-Tab System: Persistent tab bar to switch between Main Canvas and bounded Icon Canvases (16x16 to 128x128) with pixel grids, keyline guides, live multi-scale previews, and fixed 1:1 cursor coordinates.',
+                    '🔤 Offline Font Importer & Fixed Effects System: Load local .ttf / .otf / .woff fonts offline across restarts, plus fixed drop shadow, inner shadow, glow, and background blur rendering with Spread controls.',
+                    '🚫 Removed — Liquid Glass & Cosmic Glassmorphism Themes: Streamlined to Modern Studio Light, Obsidian Studio Dark, and System Default for cleaner focus and WCAG AAA contrast.',
+                    '🚫 Removed — Simulated Fake Bot Collaborators: Eliminated fake mock teammates and erratic wandering bot cursors; rooms exclusively connect genuine designers.',
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _buildVersionCard(
+                  version: 'v0.3.0',
+                  date: 'Previous Studio Edition',
+                  tagColor: const Color(0xFF64748B),
+                  isLatest: false,
                   isDark: isDark,
                   features: const [
                     '🎯 Automatic Curve Bending Vector Pen: Every new anchor point now bends interactively on drag and locks curves upon pointer release. Tap/click immediately lets you add more points smoothly.',
@@ -2763,7 +2799,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -2780,7 +2819,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
               Text(
                 date,
                 style: TextStyle(
@@ -2788,7 +2826,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   color: isDark ? FormaColors.darkTextMuted : FormaColors.lightTextMuted,
                 ),
               ),
-              const Spacer(),
               if (isLatest)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -2840,7 +2877,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: const Text('About Forma Studio'),
         content: const Text(
           'Forma Studio is a free, mobile-first, Figma-inspired design application with a soft blue-gray neumorphic interface.\n\n'
-          'Version: v0.3.0 (Latest Release)\n\n'
+          'Version: v0.4.0 (Latest Release)\n\n'
           'Features include versioned document models, offline autosaving, interactive canvas engine, command-based history, auto-layout, prototype player, and SVG/PDF/PNG exports.',
         ),
         actions: [

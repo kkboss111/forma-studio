@@ -1113,9 +1113,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
             builder: (_) => const CollabDialog(),
           ),
           borderRadius: BorderRadius.circular(10),
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
             height: 34,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
               color: tokens.accent.withValues(alpha: isDark ? 0.20 : 0.12),
               borderRadius: BorderRadius.circular(10),
@@ -1123,17 +1124,41 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                 color: tokens.accent.withValues(alpha: isDark ? 0.45 : 0.30),
                 width: 1.0,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: tokens.accent.withValues(alpha: isDark ? 0.15 : 0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Live emerald presence pulse
+                // Live glowing emerald presence pulse
                 Container(
                   width: 8,
                   height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF10B981),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981),
                     shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.6),
+                        blurRadius: 6,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  'Live #${session.roomId}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.4,
+                    color: tokens.accent,
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -1195,17 +1220,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
                       ],
                     ),
                   ),
-                  const SizedBox(width: 6),
                 ],
-                Text(
-                  '#${session.roomId}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5,
-                    color: tokens.accent,
-                  ),
-                ),
               ],
             ),
           ),
@@ -1338,21 +1353,27 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: tokens.borderSubtle, width: 1.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: tokens.surface.withValues(alpha: isDark ? 0.90 : 0.94),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: tokens.borderSubtle, width: 1.0),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-        ],
+          child: row,
+        ),
       ),
-      child: row,
     );
   }
 
@@ -1441,25 +1462,29 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
       left: 12,
       right: 12,
       child: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          decoration: BoxDecoration(
-            color: tokens.surface,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: tokens.borderSubtle, width: 1.0),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              decoration: BoxDecoration(
+                color: tokens.surface.withValues(alpha: isDark ? 0.90 : 0.94),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: tokens.borderSubtle, width: 1.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                 // Prominent Delete Button (min 44x44 tap target)
                 _buildMobileActionButton(
                   icon: Icons.delete_outline_rounded,
@@ -1559,7 +1584,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> with WidgetsBinding
           ),
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 
   Widget _buildMobileActionButton({

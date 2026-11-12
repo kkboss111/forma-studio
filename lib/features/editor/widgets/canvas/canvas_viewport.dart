@@ -13,6 +13,8 @@ import '../../../../app/theme/forma_colors.dart';
 import '../../../../app/theme/neumorphic.dart';
 import '../../../../core/geometry/transform2d.dart';
 import '../../../../core/geometry/geometry_utils.dart';
+import '../../../../core/collab/collab_models.dart';
+import '../../../../core/collab/collab_service.dart';
 import '../../controllers/editor_state.dart';
 import '../../controllers/editor_controller.dart';
 import '../../../settings/models/app_settings.dart';
@@ -58,6 +60,9 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
     final controller = ref.read(
       editorControllerProvider(widget.project).notifier,
     );
+    final remoteCollaborators = ref.watch(remoteCollaboratorsProvider);
+    final showRemoteCursors = ref.watch(showRemoteCursorsProvider);
+    final collabService = ref.read(collabServiceProvider);
     final page = state.project.getPage(state.activePageId);
 
     if (page == null) {
@@ -104,6 +109,10 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
                       final docPt = transform.screenToDoc(event.localPosition);
                       setState(() => _cursorPosDoc = docPt);
 
+                      if (collabService.isConnected) {
+                        collabService.broadcastCursor(docPt);
+                      }
+
                       if (state.activeTool == EditorTool.select &&
                           state.dragMode == DragMode.none) {
                         final hit = GeometryUtils.hitTestNodes(
@@ -137,6 +146,18 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
                   ),
                 ),
               ),
+
+              // 1.5. Remote Collaborators Selection Highlight Layer
+              for (final peer in remoteCollaborators)
+                for (final nodeId in peer.activeNodeIds)
+                  if (state.project.nodes.containsKey(nodeId))
+                    _buildRemoteSelectionBox(state.project.nodes[nodeId]!, peer, transform),
+
+              // 1.6. Remote Collaborator Cursors Layer
+              if (showRemoteCursors)
+                for (final peer in remoteCollaborators)
+                  if (peer.cursorPosition != null)
+                    _buildRemoteCursorWidget(peer, transform),
 
               // 2. Coordinate Rulers (Top & Left)
               _buildTopRuler(constraints.maxWidth, transform),
@@ -633,9 +654,12 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
     EditorState state,
     EditorController controller,
   ) {
-    if (_dragStartScreen == null || _dragStartDoc == null) return;
     final currentDoc = transform.screenToDoc(event.localPosition);
     setState(() => _cursorPosDoc = currentDoc);
+
+    ref.read(collabServiceProvider).broadcastCursor(currentDoc);
+
+    if (_dragStartScreen == null || _dragStartDoc == null) return;
 
     final deltaDoc = currentDoc - _dragStartDoc!;
 
@@ -1037,6 +1061,114 @@ class _CanvasViewportState extends ConsumerState<CanvasViewport> {
       ),
     );
   }
+
+  Widget _buildRemoteSelectionBox(
+    DesignNode node,
+    Collaborator peer,
+    CanvasTransform transform,
+  ) {
+    final screenRect = transform.docToScreenRect(node.rect);
+    return Positioned(
+      left: screenRect.left - 2,
+      top: screenRect.top - 2,
+      width: screenRect.width + 4,
+      height: screenRect.height + 4,
+      child: IgnorePointer(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: peer.color, width: 1.5),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            Positioned(
+              top: -18,
+              left: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: peer.color,
+                  borderRadius: BorderRadius.circular(4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  peer.name,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRemoteCursorWidget(
+    Collaborator peer,
+    CanvasTransform transform,
+  ) {
+    final screenPt = transform.docToScreen(peer.cursorPosition!);
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 80),
+      curve: Curves.easeOutCubic,
+      left: screenPt.dx,
+      top: screenPt.dy,
+      child: IgnorePointer(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            CustomPaint(
+              size: const Size(18, 18),
+              painter: _RemoteCursorPainter(color: peer.color),
+            ),
+            Positioned(
+              left: 12,
+              top: 14,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: peer.color,
+                  borderRadius: BorderRadius.circular(6),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.22),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  peer.name,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 0.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   static Future<void> showInPlaceTextEditor(
     BuildContext context,
     DesignNode node,
@@ -1130,4 +1262,48 @@ class _LeftRulerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LeftRulerPainter oldDelegate) => true;
+}
+
+/// Precise Figma & Apple Freeform-style vector cursor arrow with drop shadow and crisp outline.
+class _RemoteCursorPainter extends CustomPainter {
+  final Color color;
+
+  const _RemoteCursorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(0, 16)
+      ..lineTo(4.5, 12)
+      ..lineTo(8.5, 17)
+      ..lineTo(11, 15)
+      ..lineTo(7, 10)
+      ..lineTo(13, 10)
+      ..close();
+
+    // Subtle drop shadow for depth
+    canvas.drawPath(
+      path.shift(const Offset(1, 1.5)),
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.25)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+    );
+
+    // Collaborator color body
+    canvas.drawPath(path, Paint()..color = color);
+
+    // 1px white crisp highlight outline for contrast on any background
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RemoteCursorPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

@@ -170,6 +170,7 @@ class CollabService extends ChangeNotifier {
       );
 
       _session = session;
+      _activeCollaborators = List<Collaborator>.from(session.participants);
       _subscribeToRoom(session.roomId);
       _isConnecting = false;
       _sessionController.add(_session);
@@ -220,6 +221,7 @@ class CollabService extends ChangeNotifier {
       }
 
       _session = session;
+      _activeCollaborators = List<Collaborator>.from(session.participants);
       _subscribeToRoom(cleanRoomCode);
       _isConnecting = false;
       _sessionController.add(_session);

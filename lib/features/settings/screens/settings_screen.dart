@@ -1442,7 +1442,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   SizedBox(height: 4),
                   Text(
-                    'v0.3.0 (Studio Release)',
+                    'v0.4.0 (Studio Release)',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
@@ -1463,11 +1463,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildSectionTitle('Roadmap & Future Releases (Local First)', isDark),
         const SizedBox(height: 12),
         _buildRoadmapCard(
-          icon: Icons.storage_rounded,
-          title: 'High-Speed SQLite Local Vault & Instant Rollback',
+          icon: Icons.join_inner_rounded,
+          title: 'Non-Destructive Boolean Geometry & Figma Live Sync',
           description:
-              'Crash-proof local disk persistence with microsecond project auto-snapshots, zero cloud reliance, and branching local history checkpoints.',
-          score: 9.6,
+              'Union, Subtract, Intersect, Exclude boolean vector engine with two-way Figma .fig component & token sync.',
+          score: 9.7,
           accentColor: const Color(0xFF10B981),
           isTop3: true,
           isDark: isDark,

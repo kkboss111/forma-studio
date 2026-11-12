@@ -20,6 +20,8 @@ import '../../../domain/services/vector_path_service.dart';
 import '../../../domain/services/node_render_service.dart';
 import '../../../core/export/svg_importer.dart';
 import '../../../core/export/html_importer.dart';
+import '../../../core/collab/collab_models.dart';
+import '../../../core/collab/collab_service.dart';
 import '../../../core/history/command.dart';
 import '../../../core/history/history_manager.dart';
 import '../../../core/persistence/project_repository.dart';
@@ -28,25 +30,41 @@ import 'editor_state.dart';
 
 final editorControllerProvider = StateNotifierProvider.autoDispose
     .family<EditorController, EditorState, ProjectModel>(
-      (ref, initialProject) => EditorController(initialProject),
+      (ref, initialProject) => EditorController(initialProject, ref: ref),
     );
 
 class EditorController extends StateNotifier<EditorState> {
+  final Ref? _ref;
   final HistoryManager _history = HistoryManager();
   final ProjectRepository _repository = ProjectRepository();
   final Uuid _uuid = const Uuid();
 
   static List<DesignNode> globalClipboardNodes = [];
+  StreamSubscription<CollabDelta>? _remoteDeltaSub;
 
-  EditorController(ProjectModel initialProject)
-    : super(
+  EditorController(ProjectModel initialProject, {Ref? ref})
+    : _ref = ref,
+      super(
         EditorState(
           project: initialProject,
           activePageId: initialProject.pages.isNotEmpty
               ? initialProject.pages.first.id
               : 'page-1',
         ),
-      );
+      ) {
+    _listenToCollabDeltas();
+  }
+
+  void _listenToCollabDeltas() {
+    final ref = _ref;
+    if (ref == null) return;
+    try {
+      final collab = ref.read(collabServiceProvider);
+      _remoteDeltaSub = collab.incomingDeltaStream.listen((delta) {
+        applyRemoteDelta(delta);
+      });
+    } catch (_) {}
+  }
 
   bool get canUndo => _history.canUndo;
   bool get canRedo => _history.canRedo;
@@ -70,31 +88,38 @@ class EditorController extends StateNotifier<EditorState> {
   }
 
   void selectNode(String id, {bool multiSelect = false}) {
+    Set<String> updated;
     if (multiSelect) {
-      final updated = Set<String>.from(state.selectedNodeIds);
+      updated = Set<String>.from(state.selectedNodeIds);
       if (updated.contains(id)) {
         updated.remove(id);
       } else {
         updated.add(id);
       }
-      state = state.copyWith(selectedNodeIds: updated);
     } else {
-      state = state.copyWith(selectedNodeIds: {id});
+      updated = {id};
     }
+    state = state.copyWith(selectedNodeIds: updated);
+    _broadcastSelection(updated);
   }
 
   void selectNodes(Iterable<String> ids) {
-    state = state.copyWith(selectedNodeIds: ids.toSet());
+    final updated = ids.toSet();
+    state = state.copyWith(selectedNodeIds: updated);
+    _broadcastSelection(updated);
   }
 
   void clearSelection() {
     state = state.copyWith(selectedNodeIds: {});
+    _broadcastSelection({});
   }
 
   void selectAll() {
     final page = state.project.getPage(state.activePageId);
     if (page == null) return;
-    state = state.copyWith(selectedNodeIds: page.rootNodeIds.toSet());
+    final updated = page.rootNodeIds.toSet();
+    state = state.copyWith(selectedNodeIds: updated);
+    _broadcastSelection(updated);
   }
 
   void setHovered(String? id) {
@@ -169,7 +194,7 @@ class EditorController extends StateNotifier<EditorState> {
       originalPositions: originalPositions,
       newPositions: newPositions,
     );
-    final updatedProj = _history.executeCommand(cmd, state.project);
+    final updatedProj = _executeCommand(cmd, state.project);
     state = state.copyWith(project: updatedProj);
     _repository.scheduleAutosave(updatedProj);
   }
@@ -262,7 +287,7 @@ class EditorController extends StateNotifier<EditorState> {
     );
 
     final cmd = AddNodeCommand(pageId: state.activePageId, node: newNode);
-    final updatedProj = _history.executeCommand(cmd, state.project);
+    final updatedProj = _executeCommand(cmd, state.project);
 
     state = state.copyWith(
       project: updatedProj,
@@ -335,7 +360,7 @@ class EditorController extends StateNotifier<EditorState> {
     );
 
     final cmd = AddNodeCommand(pageId: state.activePageId, node: newNode);
-    final updatedProj = _history.executeCommand(cmd, state.project);
+    final updatedProj = _executeCommand(cmd, state.project);
 
     state = state.copyWith(
       project: updatedProj,
@@ -434,7 +459,7 @@ class EditorController extends StateNotifier<EditorState> {
       pageId: state.activePageId,
       nodesToDelete: toDelete,
     );
-    final updatedProj = _history.executeCommand(cmd, state.project);
+    final updatedProj = _executeCommand(cmd, state.project);
 
     state = state.copyWith(project: updatedProj, selectedNodeIds: {});
     _repository.scheduleAutosave(updatedProj);
@@ -457,7 +482,7 @@ class EditorController extends StateNotifier<EditorState> {
         );
 
         final cmd = AddNodeCommand(pageId: state.activePageId, node: clone);
-        current = _history.executeCommand(cmd, current);
+        current = _executeCommand(cmd, current);
         newSelected.add(newId);
       }
     }
@@ -800,7 +825,7 @@ class EditorController extends StateNotifier<EditorState> {
     }
 
     final cmd = UpdateNodeCommand(previousNode: original, updatedNode: nodeToSave);
-    final updatedProj = _history.executeCommand(cmd, state.project);
+    final updatedProj = _executeCommand(cmd, state.project);
     state = state.copyWith(project: updatedProj);
     _repository.scheduleAutosave(updatedProj);
   }
@@ -1020,6 +1045,7 @@ class EditorController extends StateNotifier<EditorState> {
       final updatedProj = _history.undo(state.project);
       state = state.copyWith(project: updatedProj);
       _repository.scheduleAutosave(updatedProj);
+      _broadcastSnapshot(updatedProj);
     }
   }
 
@@ -1028,6 +1054,7 @@ class EditorController extends StateNotifier<EditorState> {
       final updatedProj = _history.redo(state.project);
       state = state.copyWith(project: updatedProj);
       _repository.scheduleAutosave(updatedProj);
+      _broadcastSnapshot(updatedProj);
     }
   }
 
@@ -1089,7 +1116,7 @@ class EditorController extends StateNotifier<EditorState> {
             fills: const [DesignFill.solid(Color(0xFF0F172A))],
           );
           final cmd = AddNodeCommand(pageId: state.activePageId, node: textNode);
-          final updated = _history.executeCommand(cmd, state.project);
+          final updated = _executeCommand(cmd, state.project);
           state = state.copyWith(project: updated, selectedNodeIds: {textNodeId});
           _repository.scheduleAutosave(updated);
           return;
@@ -1111,7 +1138,7 @@ class EditorController extends StateNotifier<EditorState> {
       );
 
       final cmd = AddNodeCommand(pageId: state.activePageId, node: clone);
-      current = _history.executeCommand(cmd, current);
+      current = _executeCommand(cmd, current);
       newSelected.add(newId);
     }
 
@@ -1215,7 +1242,7 @@ class EditorController extends StateNotifier<EditorState> {
     );
 
     final cmd = AddNodeCommand(pageId: state.activePageId, node: newNode);
-    final updatedProj = _history.executeCommand(cmd, state.project);
+    final updatedProj = _executeCommand(cmd, state.project);
 
     state = state.copyWith(
       project: updatedProj,
@@ -1860,11 +1887,11 @@ class EditorController extends StateNotifier<EditorState> {
 
       for (final child in result.childNodes) {
         final cmd = AddNodeCommand(pageId: state.activePageId, node: child);
-        current = _history.executeCommand(cmd, current);
+        current = _executeCommand(cmd, current);
       }
 
       final rootCmd = AddNodeCommand(pageId: state.activePageId, node: result.rootFrame);
-      current = _history.executeCommand(rootCmd, current);
+      current = _executeCommand(rootCmd, current);
 
       state = state.copyWith(
         project: current,
@@ -1889,11 +1916,11 @@ class EditorController extends StateNotifier<EditorState> {
 
       for (final child in result.childNodes) {
         final cmd = AddNodeCommand(pageId: state.activePageId, node: child);
-        current = _history.executeCommand(cmd, current);
+        current = _executeCommand(cmd, current);
       }
 
       final rootCmd = AddNodeCommand(pageId: state.activePageId, node: result.rootFrame);
-      current = _history.executeCommand(rootCmd, current);
+      current = _executeCommand(rootCmd, current);
 
       state = state.copyWith(
         project: current,
@@ -1906,8 +1933,159 @@ class EditorController extends StateNotifier<EditorState> {
     }
   }
 
+  // ===========================================================================
+  // Real-Time Collaboration & Delta Synchronization Helpers
+  // ===========================================================================
+
+  ProjectModel _executeCommand(Command cmd, [ProjectModel? baseProj]) {
+    final target = baseProj ?? state.project;
+    final updated = _history.executeCommand(cmd, target);
+    _broadcastCommandDelta(cmd);
+    return updated;
+  }
+
+  void _broadcastCommandDelta(Command cmd) {
+    final ref = _ref;
+    if (ref == null) return;
+    try {
+      final collab = ref.read(collabServiceProvider);
+      if (!collab.isConnected || collab.session == null || collab.localUser == null) return;
+      final local = collab.localUser!;
+
+      if (cmd is AddNodeCommand) {
+        collab.broadcastNodeDelta(CollabDelta.nodeAdded(
+          senderId: local.id,
+          senderName: local.name,
+          node: cmd.node,
+        ));
+      } else if (cmd is UpdateNodeCommand) {
+        collab.broadcastNodeDelta(CollabDelta.nodeUpdated(
+          senderId: local.id,
+          senderName: local.name,
+          node: cmd.updatedNode,
+        ));
+      } else if (cmd is DeleteNodesCommand) {
+        collab.broadcastNodeDelta(CollabDelta.nodesDeleted(
+          senderId: local.id,
+          senderName: local.name,
+          nodeIds: cmd.nodesToDelete.map((n) => n.id).toList(),
+        ));
+      } else if (cmd is MoveNodesCommand) {
+        for (final entry in cmd.newPositions.entries) {
+          final node = state.project.nodes[entry.key];
+          if (node != null) {
+            collab.broadcastNodeDelta(CollabDelta.nodeUpdated(
+              senderId: local.id,
+              senderName: local.name,
+              node: node,
+            ));
+          }
+        }
+      } else if (cmd is BatchCommand) {
+        for (final sub in cmd.commands) {
+          _broadcastCommandDelta(sub);
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _broadcastSelection(Set<String> selectedIds) {
+    final ref = _ref;
+    if (ref == null) return;
+    try {
+      final collab = ref.read(collabServiceProvider);
+      if (collab.isConnected) {
+        collab.broadcastSelection(selectedIds);
+      }
+    } catch (_) {}
+  }
+
+  void _broadcastSnapshot(ProjectModel proj) {
+    final ref = _ref;
+    if (ref == null) return;
+    try {
+      final collab = ref.read(collabServiceProvider);
+      if (collab.isConnected && collab.session != null && collab.localUser != null) {
+        collab.broadcastNodeDelta(CollabDelta.projectSnapshot(
+          senderId: collab.localUser!.id,
+          senderName: collab.localUser!.name,
+          nodes: proj.nodes.values.toList(),
+        ));
+      }
+    } catch (_) {}
+  }
+
+  /// Reconciles incoming remote node mutations from joined peers onto local canvas state.
+  void applyRemoteDelta(CollabDelta delta) {
+    switch (delta.type) {
+      case CollabDeltaType.nodeAdded:
+        if (delta.node != null) {
+          final node = delta.node!;
+          final page = state.project.getPage(state.activePageId);
+          if (page != null) {
+            final updatedNodes = Map<String, DesignNode>.from(state.project.nodes)..[node.id] = node;
+            final updatedRoots = List<String>.from(page.rootNodeIds);
+            if (node.parentId == null && !updatedRoots.contains(node.id)) {
+              updatedRoots.add(node.id);
+            }
+            final updatedPage = page.copyWith(rootNodeIds: updatedRoots);
+            final updatedProject = state.project.copyWith(
+              pages: state.project.pages.map((p) => p.id == updatedPage.id ? updatedPage : p).toList(),
+              nodes: updatedNodes,
+            );
+            state = state.copyWith(project: updatedProject);
+          }
+        }
+        break;
+
+      case CollabDeltaType.nodeUpdated:
+        if (delta.node != null) {
+          final node = delta.node!;
+          final updatedNodes = Map<String, DesignNode>.from(state.project.nodes)..[node.id] = node;
+          final updatedProject = state.project.copyWith(nodes: updatedNodes);
+          state = state.copyWith(project: updatedProject);
+        }
+        break;
+
+      case CollabDeltaType.nodesDeleted:
+        if (delta.nodeIds != null && delta.nodeIds!.isNotEmpty) {
+          final toDelete = delta.nodeIds!.toSet();
+          final updatedNodes = Map<String, DesignNode>.from(state.project.nodes)
+            ..removeWhere((id, _) => toDelete.contains(id));
+          final page = state.project.getPage(state.activePageId);
+          if (page != null) {
+            final updatedRoots = page.rootNodeIds.where((id) => !toDelete.contains(id)).toList();
+            final updatedPage = page.copyWith(rootNodeIds: updatedRoots);
+            final updatedProject = state.project.copyWith(
+              pages: state.project.pages.map((p) => p.id == updatedPage.id ? updatedPage : p).toList(),
+              nodes: updatedNodes,
+            );
+            state = state.copyWith(
+              project: updatedProject,
+              selectedNodeIds: state.selectedNodeIds.difference(toDelete),
+            );
+          }
+        }
+        break;
+
+      case CollabDeltaType.projectSnapshot:
+      case CollabDeltaType.forceSync:
+        if (delta.nodes != null && delta.nodes!.isNotEmpty) {
+          final newNodes = {for (final n in delta.nodes!) n.id: n};
+          final updatedNodes = Map<String, DesignNode>.from(state.project.nodes)..addAll(newNodes);
+          final updatedProject = state.project.copyWith(nodes: updatedNodes);
+          state = state.copyWith(project: updatedProject);
+        }
+        break;
+
+      default:
+        break;
+    }
+  }
+
   @override
   void dispose() {
+    _remoteDeltaSub?.cancel();
     _animTimer?.cancel();
     _repository.dispose();
     super.dispose();

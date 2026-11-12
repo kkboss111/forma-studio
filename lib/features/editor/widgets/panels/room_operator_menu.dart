@@ -817,6 +817,74 @@ class _RoomOperatorMenuState extends ConsumerState<RoomOperatorMenu> {
             },
           ),
         ),
+        if (participants.length <= 1) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: tokens.wellBg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: FormaColors.primaryBlue.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: FormaColors.primaryBlue.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.person_add_rounded,
+                    size: 18,
+                    color: FormaColors.primaryBlue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'No other collaborators connected yet',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.textMain,
+                        ),
+                      ),
+                      Text(
+                        'Share your room code to invite friends!',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: tokens.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                NeuButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  onPressed: () => _copyRoomCode(service.session?.roomId ?? ''),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.copy_rounded, size: 13),
+                      SizedBox(width: 4),
+                      Text(
+                        'Copy Code',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
