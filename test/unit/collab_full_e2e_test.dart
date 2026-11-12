@@ -1,9 +1,110 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:forma_studio/core/collab/collab_models.dart';
 import 'package:forma_studio/core/collab/collab_service.dart';
+import 'package:forma_studio/core/collab/collab_transport.dart';
 import 'package:forma_studio/core/collab/firebase_collab_adapter.dart';
 import 'package:forma_studio/domain/models/node_model.dart';
 import 'package:forma_studio/domain/models/node_types.dart';
+
+/// In-memory simulated Firebase RTDB REST server over [CollabTransport].
+class _FakeFirebaseRtdbTransport implements CollabTransport {
+  final Map<String, Map<String, dynamic>> rooms = {};
+  final List<String> requestLog = [];
+  final StreamController<Map<String, dynamic>> _tabCtrl =
+      StreamController<Map<String, dynamic>>.broadcast();
+  int _pushCounter = 0;
+
+  @override
+  bool get supportsBroadcastChannel => true;
+
+  @override
+  Stream<Map<String, dynamic>> get localTabMessages => _tabCtrl.stream;
+
+  @override
+  void postLocalTabMessage(Map<String, dynamic> message) {
+    if (!_tabCtrl.isClosed) _tabCtrl.add(message);
+  }
+
+  @override
+  Future<CollabHttpResponse> request({
+    required String method,
+    required Uri uri,
+    Map<String, String>? headers,
+    String? body,
+  }) async {
+    final path = uri.path.replaceAll('.json', '');
+    requestLog.add('$method $path');
+    final segments = path.split('/').where((s) => s.isNotEmpty).toList();
+    // Expect /forma_rooms/<roomId>[/...]
+    if (segments.length < 2 || segments[0] != 'forma_rooms') {
+      return const CollabHttpResponse(statusCode: 404, body: 'null');
+    }
+
+    final roomId = segments[1];
+    final decoded = body != null && body.isNotEmpty ? jsonDecode(body) : null;
+
+    if (method == 'PUT' && segments.length == 2) {
+      rooms[roomId] = Map<String, dynamic>.from(decoded as Map);
+      return CollabHttpResponse(statusCode: 200, body: jsonEncode(rooms[roomId]));
+    }
+
+    if (method == 'GET' && segments.length == 2) {
+      final room = rooms[roomId];
+      return CollabHttpResponse(
+        statusCode: 200,
+        body: room == null ? 'null' : jsonEncode(room),
+      );
+    }
+
+    if (method == 'PATCH' && segments.length == 2) {
+      final room = rooms[roomId];
+      if (room == null) return const CollabHttpResponse(statusCode: 404, body: 'null');
+      room.addAll(Map<String, dynamic>.from(decoded as Map));
+      return CollabHttpResponse(statusCode: 200, body: jsonEncode(room));
+    }
+
+    if (segments.length == 4 && segments[2] == 'participants') {
+      final userId = segments[3];
+      final room = rooms[roomId];
+      if (room == null) return const CollabHttpResponse(statusCode: 404, body: 'null');
+      final participants = Map<String, dynamic>.from(
+        (room['participants'] as Map?) ?? {},
+      );
+      if (method == 'PATCH') {
+        final existing = participants[userId] is Map
+            ? Map<String, dynamic>.from(participants[userId] as Map)
+            : <String, dynamic>{};
+        existing.addAll(Map<String, dynamic>.from(decoded as Map));
+        participants[userId] = existing;
+        room['participants'] = participants;
+        return CollabHttpResponse(statusCode: 200, body: jsonEncode(existing));
+      } else if (method == 'DELETE') {
+        participants.remove(userId);
+        room['participants'] = participants;
+        return const CollabHttpResponse(statusCode: 200, body: 'null');
+      }
+    }
+
+    if (segments.length == 3 && segments[2] == 'deltas' && method == 'POST') {
+      final room = rooms[roomId];
+      if (room == null) return const CollabHttpResponse(statusCode: 404, body: 'null');
+      final deltas = Map<String, dynamic>.from((room['deltas'] as Map?) ?? {});
+      final pushKey = '-Push${++_pushCounter}';
+      deltas[pushKey] = Map<String, dynamic>.from(decoded as Map);
+      room['deltas'] = deltas;
+      return CollabHttpResponse(statusCode: 200, body: jsonEncode({'name': pushKey}));
+    }
+
+    return const CollabHttpResponse(statusCode: 400, body: '{"error":"unsupported"}');
+  }
+
+  @override
+  void dispose() {
+    _tabCtrl.close();
+  }
+}
 
 void main() {
   group('End-to-End Real-Time Multi-User Collaboration Tests', () {
@@ -203,6 +304,123 @@ void main() {
       hostService.dispose();
       guestService.dispose();
       guest2Service.dispose();
+    });
+  });
+
+  group('FirebaseCollabAdapter RTDB REST Sync Tests', () {
+    test('PUT createRoom, GET/PATCH joinRoom, PATCH cursor, POST delta, and 350ms polling sync across devices', () async {
+      final sharedRtdb = _FakeFirebaseRtdbTransport();
+      const dbUrl = 'https://forma-studio-test-default-rtdb.firebaseio.com/';
+
+      final hostAdapter = FirebaseCollabAdapter(
+        realtimeDbUrl: dbUrl,
+        transport: sharedRtdb,
+      );
+      final guestAdapter = FirebaseCollabAdapter(
+        realtimeDbUrl: dbUrl,
+        transport: sharedRtdb,
+      );
+
+      expect(hostAdapter.isCloudSyncActive, isTrue);
+      expect(hostAdapter.realtimeDbUrl, 'https://forma-studio-test-default-rtdb.firebaseio.com');
+
+      final hostService = CollabService(adapter: hostAdapter);
+      final guestService = CollabService(adapter: guestAdapter);
+
+      // 1. Host creates room via PUT
+      final hostSession = await hostService.quickHostRoom(
+        roomName: 'Cloud Design Room',
+        userName: 'CloudHost',
+      );
+      final roomId = hostSession.roomId;
+      expect(
+        sharedRtdb.requestLog,
+        contains('PUT /forma_rooms/$roomId'),
+      );
+      expect(hostSession.participants.length, 1);
+
+      // 2. Guest joins via GET + PATCH
+      final guestSession = await guestService.joinRoom(roomId, 'CloudGuest');
+      expect(
+        sharedRtdb.requestLog,
+        containsAll([
+          'GET /forma_rooms/$roomId',
+          'PATCH /forma_rooms/$roomId/participants/${guestService.localUser!.id}',
+        ]),
+      );
+      expect(guestSession.participants.length, 2);
+
+      // 3. Guest broadcasts cursor -> PATCH participants/<guestId>
+      guestService.broadcastCursor(const Offset(512, 384));
+      await Future.delayed(const Duration(milliseconds: 80));
+
+      // Wait for host 350ms polling cycle to pick up guest + cursor
+      await Future.delayed(const Duration(milliseconds: 420));
+
+      expect(hostService.activeCollaborators.length, 2);
+      final guestOnHost = hostService.remoteCollaborators.first;
+      expect(guestOnHost.name, 'CloudGuest');
+      expect(guestOnHost.cursorPosition, const Offset(512, 384));
+
+      // 4. Host posts node delta -> POST deltas -> Guest receives via 350ms polling
+      final guestDeltas = <CollabDelta>[];
+      final sub = guestService.incomingDeltaStream.listen(guestDeltas.add);
+
+      const node = DesignNode(
+        id: 'rtdb-node-1',
+        type: NodeType.rectangle,
+        name: 'Cloud Frame',
+        x: 20,
+        y: 30,
+        width: 300,
+        height: 200,
+      );
+      hostService.broadcastNodeDelta(
+        CollabDelta.nodeAdded(
+          senderId: hostService.localUser!.id,
+          senderName: hostService.localUser!.name,
+          node: node,
+        ),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 450));
+
+      expect(
+        sharedRtdb.requestLog,
+        contains('POST /forma_rooms/$roomId/deltas'),
+      );
+      expect(guestDeltas.any((d) => d.type == CollabDeltaType.nodeAdded && d.node?.id == 'rtdb-node-1'), isTrue);
+
+      // 5. Host locks room -> PATCH room isLocked -> joining fails with lock error
+      hostService.setRoomLocked(true);
+      await Future.delayed(const Duration(milliseconds: 80));
+      expect(
+        sharedRtdb.requestLog,
+        contains('PATCH /forma_rooms/$roomId'),
+      );
+
+      final lockedOutGuest = CollabService(
+        adapter: FirebaseCollabAdapter(realtimeDbUrl: dbUrl, transport: sharedRtdb),
+      );
+      await expectLater(
+        lockedOutGuest.joinRoom(roomId, 'Intruder'),
+        throwsException,
+      );
+
+      // 6. Leave sends DELETE participant
+      final guestId = guestService.localUser!.id;
+      await guestService.leaveRoom();
+      expect(
+        sharedRtdb.requestLog,
+        contains('DELETE /forma_rooms/$roomId/participants/$guestId'),
+      );
+
+      await sub.cancel();
+      await hostService.leaveRoom();
+      hostService.dispose();
+      guestService.dispose();
+      lockedOutGuest.dispose();
+      sharedRtdb.dispose();
     });
   });
 }

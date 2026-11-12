@@ -34,10 +34,14 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
   final TextEditingController _joinRoomCodeCtrl = TextEditingController();
   final TextEditingController _joinUserNameCtrl =
       TextEditingController(text: 'Peer Designer');
+  final TextEditingController _firebaseUrlCtrl = TextEditingController();
 
   late Color _selectedColor;
   bool _copied = false;
   bool _isActionInProgress = false;
+  bool _isSavingFirebase = false;
+  bool _isFirebaseSetupExpanded = false;
+  bool _syncedInitialFirebaseUrl = false;
   String? _statusError;
 
   @override
@@ -48,12 +52,25 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_syncedInitialFirebaseUrl) {
+      _syncedInitialFirebaseUrl = true;
+      final savedUrl = _resolveService().firebaseDbUrl;
+      if (savedUrl != null && savedUrl.isNotEmpty) {
+        _firebaseUrlCtrl.text = savedUrl;
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _tabController.dispose();
     _createRoomNameCtrl.dispose();
     _createUserNameCtrl.dispose();
     _joinRoomCodeCtrl.dispose();
     _joinUserNameCtrl.dispose();
+    _firebaseUrlCtrl.dispose();
     super.dispose();
   }
 
@@ -166,6 +183,64 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
     });
   }
 
+  Future<void> _handleSaveFirebase() async {
+    final service = _resolveService();
+    setState(() {
+      _isSavingFirebase = true;
+      _statusError = null;
+    });
+
+    try {
+      await service.configureFirebase(_firebaseUrlCtrl.text);
+      if (mounted) {
+        setState(() {
+          _isSavingFirebase = false;
+          if (service.isFirebaseConfigured) {
+            _isFirebaseSetupExpanded = false;
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              service.isFirebaseConfigured
+                  ? 'Firebase Cloud Sync connected! Host or join rooms across any device.'
+                  : 'Switched to Browser Tab & Local Engine.',
+            ),
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSavingFirebase = false;
+          _statusError = '$e';
+        });
+      }
+    }
+  }
+
+  Future<void> _handleClearFirebase() async {
+    final service = _resolveService();
+    setState(() {
+      _isSavingFirebase = true;
+      _statusError = null;
+    });
+    await service.clearFirebaseConfig();
+    if (mounted) {
+      _firebaseUrlCtrl.clear();
+      setState(() => _isSavingFirebase = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Switched back to Browser Tab & Local Engine.'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final service = _resolveService(listen: true);
@@ -200,7 +275,7 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
                 if (isConnected)
                   _buildConnectedView(tokens, service, session)
                 else
-                  _buildDisconnectedView(tokens),
+                  _buildDisconnectedView(tokens, service),
               ],
             ),
           ),
@@ -352,9 +427,9 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
   }
 
   // ===========================================================================
-  // Disconnected View: Instant 1-Click Host, Quick Join, and Options
+  // Disconnected View: Instant 1-Click Host, Quick Join, and Backend Setup
   // ===========================================================================
-  Widget _buildDisconnectedView(FormaThemeTokens tokens) {
+  Widget _buildDisconnectedView(FormaThemeTokens tokens, CollabService service) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -392,9 +467,9 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
             ],
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
         SizedBox(
-          height: 380,
+          height: 348,
           child: TabBarView(
             controller: _tabController,
             children: [
@@ -403,7 +478,211 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
             ],
           ),
         ),
+        const SizedBox(height: 14),
+        _buildBackendModeCard(tokens, service),
       ],
+    );
+  }
+
+  Widget _buildBackendStatusPill(FormaThemeTokens tokens, CollabService service) {
+    final isCloud = service.isFirebaseConfigured;
+    final pillColor = isCloud ? FormaColors.successGreen : FormaColors.primaryBlue;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: pillColor.withValues(alpha: tokens.isDark ? 0.20 : 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: pillColor.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        isCloud
+            ? '☁️ Firebase Cloud Sync Active'
+            : '🌐 Browser Tab & Local Engine',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: isCloud ? FormaColors.successGreen : FormaColors.primaryBlue,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBackendModeCard(FormaThemeTokens tokens, CollabService service) {
+    final isCloud = service.isFirebaseConfigured;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: tokens.wellBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isCloud
+              ? FormaColors.successGreen.withValues(alpha: 0.35)
+              : tokens.borderSubtle,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => setState(
+              () => _isFirebaseSetupExpanded = !_isFirebaseSetupExpanded,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        'Backend Mode',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: tokens.textMain,
+                        ),
+                      ),
+                      _buildBackendStatusPill(tokens, service),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: tokens.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: tokens.borderSubtle),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        isCloud ? 'Firebase Setup' : 'Configure Cloud',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.textMain,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        _isFirebaseSetupExpanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        size: 16,
+                        color: tokens.textMuted,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isFirebaseSetupExpanded) ...[
+            const SizedBox(height: 12),
+            Divider(height: 1, color: tokens.borderSubtle),
+            const SizedBox(height: 12),
+            _buildInputLabel(tokens, 'Firebase Realtime Database URL'),
+            NeuTextField(
+              controller: _firebaseUrlCtrl,
+              hintText: 'https://my-app-default-rtdb.firebaseio.com',
+              prefixIcon: const Icon(
+                Icons.cloud_outlined,
+                size: 18,
+                color: FormaColors.primaryBlue,
+              ),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.paste_rounded, size: 17),
+                tooltip: 'Paste URL from clipboard',
+                onPressed: () async {
+                  final data = await Clipboard.getData(Clipboard.kTextPlain);
+                  if (data?.text != null) {
+                    _firebaseUrlCtrl.text = data!.text!.trim();
+                  }
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: NeuButton(
+                    height: 40,
+                    onPressed: _isSavingFirebase ? null : _handleSaveFirebase,
+                    color: FormaColors.primaryBlue,
+                    child: _isSavingFirebase
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.cloud_done_rounded, size: 16, color: Colors.white),
+                              SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Save & Connect Firebase',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+                if (isCloud) ...[
+                  const SizedBox(width: 8),
+                  NeuButton(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    onPressed: _isSavingFirebase ? null : _handleClearFirebase,
+                    color: tokens.surface,
+                    child: Text(
+                      'Local Mode',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: tokens.textMain,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: tokens.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: tokens.borderSubtle),
+              ),
+              child: Text(
+                '1. Create Firebase Realtime Database in Test Mode -> 2. Paste URL above so friends on different PCs/phones can join the same Room Code!',
+                style: TextStyle(
+                  fontSize: 11,
+                  height: 1.35,
+                  color: tokens.textMuted,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -486,12 +765,16 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
                           children: [
                             Icon(Icons.wifi_tethering_rounded, size: 20, color: Colors.white),
                             SizedBox(width: 8),
-                            Text(
-                              'Start Live Room Now',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 14,
+                            Flexible(
+                              child: Text(
+                                'Start Live Room Now',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
                           ],
@@ -622,9 +905,13 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
               children: [
                 Icon(Icons.check_circle_outline_rounded, size: 18, color: Colors.white),
                 SizedBox(width: 8),
-                Text(
-                  'Launch Custom Session',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                Flexible(
+                  child: Text(
+                    'Launch Custom Session',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ],
             ),
@@ -835,6 +1122,8 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
                             color: tokens.textMuted,
                           ),
                         ),
+                        const SizedBox(height: 6),
+                        _buildBackendStatusPill(tokens, service),
                       ],
                     ),
                   ),
@@ -882,12 +1171,16 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
                       color: Color(0xFFD97706),
                     ),
                     SizedBox(width: 8),
-                    Text(
-                      'Open Room Operator Menu (Host Controls)',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFFD97706),
+                    Flexible(
+                      child: Text(
+                        'Open Room Operator Menu (Host Controls)',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFD97706),
+                        ),
                       ),
                     ),
                   ],
@@ -1164,12 +1457,16 @@ class _CollabDialogState extends ConsumerState<CollabDialog>
             children: [
               Icon(Icons.link_off_rounded, size: 18, color: FormaColors.dangerRed),
               SizedBox(width: 8),
-              Text(
-                'Disconnect / Leave Session',
-                style: TextStyle(
-                  color: FormaColors.dangerRed,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13.5,
+              Flexible(
+                child: Text(
+                  'Disconnect / Leave Session',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: FormaColors.dangerRed,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                  ),
                 ),
               ),
             ],

@@ -12,7 +12,6 @@ import '../../../../core/export/svg_exporter.dart';
 import '../../../../core/export/pdf_exporter.dart';
 import '../../../../core/export/file_saver_service.dart';
 import '../../../../core/export/universal_format_service.dart';
-import '../../../settings/models/app_settings.dart';
 
 enum ExportFormat {
   png,
@@ -50,6 +49,7 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
   bool _transparentBg = false;
   bool _isExporting = false;
   String? _statusText;
+  Future<Uint8List>? _htmlPreviewFuture;
 
   Future<Uint8List?> _generateExportBytes() async {
     final encoder = Encoding.getByName('utf-8')!;
@@ -254,11 +254,22 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
         case ExportFormat.tokensJson:
           textData = jsonEncode(widget.project.tokens.toJson());
           break;
+        case ExportFormat.htmlCss:
+          final bytes = await UniversalFormatService.exportToFormat(
+            project: widget.project,
+            pageId: widget.activePageId,
+            format: SupportedFormat.htmlCss,
+            frameId: widget.selectedNodeId,
+          );
+          textData = Encoding.getByName('utf-8')!.decode(bytes);
+          break;
         default:
           textData = 'Forma Studio - ${widget.project.name}';
       }
       await Clipboard.setData(ClipboardData(text: textData));
-      setState(() => _statusText = 'Copied data to clipboard!');
+      setState(() => _statusText = _format == ExportFormat.htmlCss
+          ? 'Copied HTML/CSS code to clipboard!'
+          : 'Copied data to clipboard!');
     } catch (e) {
       setState(() => _statusText = 'Copy failed: $e');
     }
@@ -285,7 +296,6 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final settings = ref.watch(settingsProvider);
     final size = MediaQuery.of(context).size;
 
     return Center(
@@ -319,25 +329,30 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.file_download_outlined,
-                          size: 20,
-                          color: FormaColors.primaryBlue,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Export & Share Design',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: isDark
-                                ? FormaColors.darkTextMain
-                                : FormaColors.lightTextMain,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.file_download_outlined,
+                            size: 20,
+                            color: FormaColors.primaryBlue,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Export & Share Design',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: isDark
+                                    ? FormaColors.darkTextMain
+                                    : FormaColors.lightTextMain,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded, size: 20),
@@ -382,17 +397,18 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                           _buildFormatChip(ExportFormat.eps, 'PostScript (.eps)'),
                           _buildFormatChip(ExportFormat.dxf, 'AutoCAD (.dxf)'),
                           _buildFormatChip(ExportFormat.tokensJson, 'Tokens (.json)'),
-                          // HTML/CSS is strictly visible ONLY if enabled in settings
-                          if (settings.enableHtmlCodeExport)
-                            _buildFormatChip(ExportFormat.htmlCss, 'HTML/CSS Web Code'),
+                          _buildFormatChip(ExportFormat.htmlCss, 'HTML / CSS Web Code'),
                         ],
                       ),
                       const SizedBox(height: 18),
 
                       // PNG Specific Scale
                       if (_format == ExportFormat.png) ...[
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 8,
                           children: [
                             Text(
                               'Resolution Scale',
@@ -404,12 +420,42 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                                     : FormaColors.lightTextMain,
                               ),
                             ),
-                            Row(
-                              children: [
-                                ...[1.0, 2.0, 3.0, 4.0].map((s) {
-                                  final isSel = _scale == s;
-                                  return GestureDetector(
-                                    onTap: () => setState(() => _scale = s),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ...[1.0, 2.0, 3.0, 4.0].map((s) {
+                                    final isSel = _scale == s;
+                                    return GestureDetector(
+                                      onTap: () => setState(() => _scale = s),
+                                      child: Container(
+                                        margin: const EdgeInsets.only(left: 6),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isSel
+                                              ? FormaColors.primaryBlue
+                                              : (isDark
+                                                  ? FormaColors.darkWellBg
+                                                  : FormaColors.lightWellBg),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          '${s.toInt()}x',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: isSel ? Colors.white : null,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                  GestureDetector(
+                                    onTap: () => _showCustomScaleDialog(context, isDark),
                                     child: Container(
                                       margin: const EdgeInsets.only(left: 6),
                                       padding: const EdgeInsets.symmetric(
@@ -417,52 +463,26 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: isSel
-                                            ? FormaColors.primaryBlue
-                                            : (isDark
-                                                ? FormaColors.darkWellBg
-                                                : FormaColors.lightWellBg),
+                                        color: isDark
+                                            ? FormaColors.darkWellBg
+                                            : FormaColors.lightWellBg,
                                         borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: FormaColors.primaryBlue.withValues(alpha: 0.5),
+                                        ),
                                       ),
-                                      child: Text(
-                                        '${s.toInt()}x',
+                                      child: const Text(
+                                        'Custom',
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,
-                                          color: isSel ? Colors.white : null,
+                                          color: FormaColors.primaryBlue,
                                         ),
                                       ),
                                     ),
-                                  );
-                                }),
-                                GestureDetector(
-                                  onTap: () => _showCustomScaleDialog(context, isDark),
-                                  child: Container(
-                                    margin: const EdgeInsets.only(left: 6),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isDark
-                                          ? FormaColors.darkWellBg
-                                          : FormaColors.lightWellBg,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(
-                                        color: FormaColors.primaryBlue.withValues(alpha: 0.5),
-                                      ),
-                                    ),
-                                    child: const Text(
-                                      'Custom',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: FormaColors.primaryBlue,
-                                      ),
-                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -476,30 +496,9 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                         ),
                       ],
 
-                      // HTML Code notice when selected
+                      // HTML Code Preview Panel when selected
                       if (_format == ExportFormat.htmlCss) ...[
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: FormaColors.primaryBlue.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: FormaColors.primaryBlue.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(Icons.code_rounded, size: 20, color: FormaColors.primaryBlue),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'Developer Mode: Exports semantic HTML5 + CSS positioning ready for web deployment.',
-                                  style: TextStyle(fontSize: 11.5, height: 1.4),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        _buildHtmlPreviewSection(isDark),
                       ],
 
                       if (_statusText != null) ...[
@@ -561,7 +560,9 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                                   )
                                 : const Icon(Icons.download_rounded, size: 18),
                             label: Text(
-                              _isExporting ? 'Exporting...' : 'Save File',
+                              _isExporting
+                                  ? 'Exporting...'
+                                  : (_format == ExportFormat.htmlCss ? 'Download .html' : 'Save File'),
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             onPressed: _isExporting ? null : () => _handleExport(useShareSheet: false),
@@ -597,7 +598,8 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                       children: [
                         if (_format == ExportFormat.svg ||
                             _format == ExportFormat.formaPackage ||
-                            _format == ExportFormat.tokensJson)
+                            _format == ExportFormat.tokensJson ||
+                            _format == ExportFormat.htmlCss)
                           Expanded(
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
@@ -606,7 +608,10 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                                 ),
                               ),
                               icon: const Icon(Icons.copy_rounded, size: 15),
-                              label: const Text('Copy Data', style: TextStyle(fontSize: 11)),
+                              label: Text(
+                                _format == ExportFormat.htmlCss ? 'Copy HTML' : 'Copy Data',
+                                style: const TextStyle(fontSize: 11),
+                              ),
                               onPressed: _handleCopyToClipboard,
                             ),
                           ),
@@ -704,14 +709,168 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
     }
   }
 
+  Widget _buildHtmlPreviewSection(bool isDark) {
+    _htmlPreviewFuture ??= UniversalFormatService.exportToFormat(
+      project: widget.project,
+      pageId: widget.activePageId,
+      format: SupportedFormat.htmlCss,
+      frameId: widget.selectedNodeId,
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 8),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+          width: 1.0,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header Bar with live indicator & 1-click Copy HTML Chip
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+              border: Border(
+                bottom: BorderSide(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                ),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.code_rounded, size: 16, color: FormaColors.primaryBlue),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'HTML5 + CSS Live Output',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // 1-Click Copy HTML Chip
+                GestureDetector(
+                  key: const Key('copy_html_preview_chip'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _handleCopyToClipboard,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: FormaColors.primaryBlue.withValues(alpha: isDark ? 0.25 : 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: FormaColors.primaryBlue.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.copy_rounded, size: 12, color: FormaColors.primaryBlue),
+                        SizedBox(width: 4),
+                        Text(
+                          'Copy HTML',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: FormaColors.primaryBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Monospace Code Preview Box (bounded height ~150px)
+          Container(
+            height: 150,
+            padding: const EdgeInsets.all(10),
+            child: FutureBuilder<Uint8List>(
+              future: _htmlPreviewFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: FormaColors.primaryBlue,
+                      ),
+                    ),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Failed to render HTML: ${snapshot.error}',
+                      style: const TextStyle(fontSize: 11, color: FormaColors.dangerRed),
+                    ),
+                  );
+                }
+                final code = (snapshot.hasData && snapshot.data!.isNotEmpty)
+                    ? Encoding.getByName('utf-8')!.decode(snapshot.data!)
+                    : '<!-- No HTML content generated -->';
+
+                return SingleChildScrollView(
+                  scrollDirection: Axis.vertical,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SelectableText(
+                      code,
+                      style: TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 10.5,
+                        height: 1.45,
+                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0369A1),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFormatChip(ExportFormat format, String label) {
     final isSelected = _format == format;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
+      key: Key('export_chip_${format.name}'),
       onTap: () => setState(() {
         _format = format;
         _statusText = null;
+        if (format == ExportFormat.htmlCss) {
+          _htmlPreviewFuture = UniversalFormatService.exportToFormat(
+            project: widget.project,
+            pageId: widget.activePageId,
+            format: SupportedFormat.htmlCss,
+            frameId: widget.selectedNodeId,
+          );
+        }
       }),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),

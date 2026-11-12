@@ -151,4 +151,63 @@ void main() {
       expect(find.byType(RoomOperatorMenu), findsNothing);
     },
   );
+
+  testWidgets(
+    'CollabDialog renders Firebase Cloud Setup UI cleanly without overflow on mobile 375x812',
+    (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    onPressed: () => showDialog(
+                      context: context,
+                      builder: (_) => const CollabDialog(),
+                    ),
+                    child: const Text('Open Collab'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open Collab'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(CollabDialog), findsOneWidget);
+      expect(find.text('🌐 Browser Tab & Local Engine'), findsOneWidget);
+
+      // Expand Firebase Cloud Setup card
+      await tester.tap(find.text('Configure Cloud'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Firebase Realtime Database URL'), findsOneWidget);
+      expect(find.text('Save & Connect Firebase'), findsOneWidget);
+
+      // Enter Firebase URL and connect
+      await tester.ensureVisible(find.byType(TextField).last);
+      await tester.enterText(
+        find.byType(TextField).last,
+        'https://forma-test-default-rtdb.firebaseio.com',
+      );
+      await tester.ensureVisible(find.text('Save & Connect Firebase'));
+      await tester.tap(find.text('Save & Connect Firebase'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('☁️ Firebase Cloud Sync Active'), findsOneWidget);
+    },
+  );
 }

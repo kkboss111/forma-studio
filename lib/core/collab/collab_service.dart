@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../../domain/models/node_model.dart';
 import 'collab_models.dart';
@@ -8,10 +9,14 @@ import 'firebase_collab_adapter.dart';
 
 /// Central real-time multi-user collaboration engine.
 /// Coordinates session presence, live cursor synchronization, delta broadcasting,
-/// room operator permissions, and local vs remote state reconciliation.
+/// room operator permissions, Firebase Cloud setup, and local/browser state reconciliation.
 class CollabService extends ChangeNotifier {
+  static const String _prefFirebaseUrlKey = 'forma_firebase_rtdb_url';
+  static const String _prefFirebaseApiKeyKey = 'forma_firebase_api_key';
+
   final CollabBackendAdapter _adapter;
   final Uuid _uuid = const Uuid();
+  bool _disposed = false;
 
   CollabSession? _session;
   Collaborator? _localUser;
@@ -35,6 +40,9 @@ class CollabService extends ChangeNotifier {
   CollabService({CollabBackendAdapter? adapter})
       : _adapter = adapter ?? FirebaseCollabAdapter() {
     _initDefaultUser();
+    if (adapter == null) {
+      _loadSavedFirebaseConfig();
+    }
   }
 
   // ===========================================================================
@@ -48,6 +56,16 @@ class CollabService extends ChangeNotifier {
   bool get showRemoteCursors => _showRemoteCursors;
   String? get errorMessage => _errorMessage;
   String get adapterName => _adapter.adapterName;
+  bool get isFirebaseConfigured => _adapter.isCloudSyncActive;
+  bool get supportsBrowserTabSync => _adapter.supportsBrowserTabSync;
+
+  String? get firebaseDbUrl => _adapter is FirebaseCollabAdapter
+      ? _adapter.realtimeDbUrl
+      : null;
+
+  String? get firebaseApiKey => _adapter is FirebaseCollabAdapter
+      ? _adapter.apiKey
+      : null;
 
   /// Whether current local user is the host/operator of the active room.
   bool get isHost => _session != null && _localUser != null && _session!.hostId == _localUser!.id;
@@ -56,7 +74,9 @@ class CollabService extends ChangeNotifier {
   bool get canEdit => isHost || (_localUser?.canEdit ?? true);
 
   /// Live latency ping in milliseconds (e.g. 14ms).
-  int get pingMs => _session?.pingMs ?? 14;
+  int get pingMs => _adapter is FirebaseCollabAdapter && isFirebaseConfigured
+      ? _adapter.pingMs
+      : (_session?.pingMs ?? 14);
 
   /// Whether active room is locked to new participants.
   bool get isRoomLocked => _session?.isLocked ?? false;
@@ -75,6 +95,74 @@ class CollabService extends ChangeNotifier {
   Stream<List<Collaborator>> get collaboratorsStream =>
       _adapter.streamCollaborators(_session?.roomId ?? '');
   Stream<CollabDelta> get incomingDeltaStream => _incomingDeltaController.stream;
+
+  void _safeNotify() {
+    if (!_disposed) {
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadSavedFirebaseConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedUrl = prefs.getString(_prefFirebaseUrlKey);
+      final savedKey = prefs.getString(_prefFirebaseApiKeyKey);
+      if (savedUrl != null &&
+          savedUrl.trim().isNotEmpty &&
+          _adapter is FirebaseCollabAdapter) {
+        _adapter.configure(realtimeDbUrl: savedUrl, apiKey: savedKey);
+        _safeNotify();
+      }
+    } catch (_) {
+      // SharedPreferences may not be mocked in pure Dart unit tests.
+    }
+  }
+
+  /// Configures Firebase Realtime Database URL at runtime, persists it across
+  /// sessions via `SharedPreferences`, and switches the active backend cleanly.
+  Future<void> configureFirebase(String dbUrl, {String? apiKey}) async {
+    final normalized = FirebaseCollabAdapter.normalizeDbUrl(dbUrl);
+    if (normalized.isNotEmpty &&
+        !FirebaseCollabAdapter.isValidRealtimeDbUrl(normalized)) {
+      _errorMessage =
+          'Invalid Firebase RTDB URL. Expected https://<project>.firebaseio.com or https://<project>-default-rtdb.<region>.firebasedatabase.app';
+      _safeNotify();
+      throw ArgumentError(_errorMessage);
+    }
+
+    if (isConnected) {
+      await leaveRoom();
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (normalized.isEmpty) {
+        await prefs.remove(_prefFirebaseUrlKey);
+        await prefs.remove(_prefFirebaseApiKeyKey);
+      } else {
+        await prefs.setString(_prefFirebaseUrlKey, normalized);
+        if (apiKey != null && apiKey.trim().isNotEmpty) {
+          await prefs.setString(_prefFirebaseApiKeyKey, apiKey.trim());
+        } else {
+          await prefs.remove(_prefFirebaseApiKeyKey);
+        }
+      }
+    } catch (_) {
+      // Ignore storage failures in ephemeral/mocked test environments.
+    }
+
+    if (_adapter is FirebaseCollabAdapter) {
+      _adapter.configure(
+        realtimeDbUrl: normalized.isEmpty ? null : normalized,
+        apiKey: apiKey,
+      );
+    }
+    _errorMessage = null;
+    _safeNotify();
+  }
+
+  /// Clears saved Firebase credentials and switches back to the Local / Browser Tab Engine.
+  Future<void> clearFirebaseConfig() => configureFirebase('');
 
   void _initDefaultUser() {
     final userId = 'usr_${_uuid.v4().substring(0, 8)}';
@@ -220,12 +308,19 @@ class CollabService extends ChangeNotifier {
         throw Exception('Room is locked by host.');
       }
 
+      if (_localUser != null && session.hostId == _localUser!.id) {
+        _localUser = _localUser!.copyWith(
+          isHost: true,
+          role: CollaboratorRole.host,
+        );
+      }
+
       _session = session;
       _activeCollaborators = List<Collaborator>.from(session.participants);
       _subscribeToRoom(cleanRoomCode);
       _isConnecting = false;
       _sessionController.add(_session);
-      notifyListeners();
+      _safeNotify();
 
       return session;
     } catch (e) {
@@ -471,6 +566,7 @@ class CollabService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _cursorThrottleTimer?.cancel();
     _collabSub?.cancel();
     _deltaSub?.cancel();
